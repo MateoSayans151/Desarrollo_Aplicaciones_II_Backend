@@ -1,0 +1,7 @@
+package ar.edu.universidad.gestionacademica.Excepciones;
+
+public class RecursoNoEncontradoException extends RuntimeException {
+    public RecursoNoEncontradoException(String mensaje) {
+        super(mensaje);
+    }
+}
