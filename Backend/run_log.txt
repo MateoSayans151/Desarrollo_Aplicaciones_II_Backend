@@ -1,0 +1,15 @@
+﻿mvnw.cmd : Excepción al llamar a "DownloadFile" con los argumentos "2": "Excepción durante una solicitud WebClient."
+En línea: 1 Carácter: 302
++ ... tch {} } }; & "D:\DesarrolloAPIS\Backend\Backend\mvnw.cmd" -f "D:\Des ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Excepción al ll...tud WebClient.":String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+En línea: 1 Carácter: 282
++ ... pe]::Tls12; $webclient.DownloadFile('https://repo.maven.apache.org/ma ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : WebException
+ 
+Error: no se ha encontrado o cargado la clase principal org.apache.maven.wrapper.MavenWrapperMain
+Causado por: java.lang.ClassNotFoundException: org.apache.maven.wrapper.MavenWrapperMain

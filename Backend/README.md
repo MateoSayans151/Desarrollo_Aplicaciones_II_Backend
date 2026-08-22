@@ -1,6 +1,6 @@
 # Gestión Académica y Planificación
 
-Backend MVC/REST construido con Spring Boot 3, Java 17, Spring Data JPA, Spring Security y H2.
+Backend MVC/REST construido con Spring Boot 3, Java 17, Spring Data JPA, Spring Security y PostgreSQL (Supabase).
 
 ## Estructura
 
@@ -47,8 +47,13 @@ Estas credenciales son únicamente para desarrollo. En un entorno real se deben 
 `UNIVERSIDAD_ADMIN_EMAIL`, `UNIVERSIDAD_ADMIN_PASSWORD` y `UNIVERSIDAD_DOMINIO_EMAIL`, o
 reemplazar la autenticación en memoria por OAuth2/SSO de la universidad.
 
-La consola H2 está disponible en `/h2-console`, con URL JDBC
-`jdbc:h2:mem:gestionacademica`, usuario `sa` y clave vacía.
+### Usuario admin de prueba
+
+Además del admin sembrado por defecto, existe un usuario admin de prueba creado a mano
+para testear la API:
+
+- Usuario: `admin.prueba@universidad.edu.ar`
+- Clave: `AdminPrueba123!`
 
 ## Endpoints principales
 

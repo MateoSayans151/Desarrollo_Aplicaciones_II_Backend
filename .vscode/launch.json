@@ -4,11 +4,11 @@
             "type": "java",
             "name": "Spring Boot-GestionAcademicaApplication<gestion-academica>",
             "request": "launch",
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/Backend",
             "mainClass": "ar.edu.universidad.gestionacademica.GestionAcademicaApplication",
             "projectName": "gestion-academica",
             "args": "",
-            "envFile": "${workspaceFolder}/.env"
+            "envFile": "${workspaceFolder}/Backend/.env"
         }
     ]
 }
