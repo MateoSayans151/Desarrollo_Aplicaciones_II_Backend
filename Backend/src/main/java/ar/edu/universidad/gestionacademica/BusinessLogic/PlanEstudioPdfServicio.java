@@ -33,7 +33,7 @@ public class PlanEstudioPdfServicio {
     public byte[] generar(Long planId) {
         PlanEstudio plan = planes.findById(planId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Plan no encontrado"));
-        List<Asignatura> materias = asignaturas.findByPlanIdOrderByCuatrimestreSugeridoAscNombreAsc(planId);
+        List<Asignatura> materias = asignaturas.findByPlanIdOrderByNombreAsc(planId);
 
         try (PDDocument documento = new PDDocument()) {
             PDType1Font fuenteTitulo = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
@@ -43,16 +43,15 @@ public class PlanEstudioPdfServicio {
             EscritorPdf escritor = new EscritorPdf(documento);
             escritor.linea(fuenteTitulo, 16, "Plan de estudios");
             escritor.linea(fuenteTexto, 12, plan.getCarrera().getNombre() + " (" + plan.getCarrera().getCodigo() + ")");
-            escritor.linea(fuenteTexto, 12, "Version " + plan.getVersion());
-            escritor.linea(fuenteTexto, 12, "Vigencia: desde " + plan.getVigenciaDesde()
-                    + (plan.getVigenciaHasta() != null ? " hasta " + plan.getVigenciaHasta() : " (sin fecha de fin)"));
+            escritor.linea(fuenteTexto, 12, plan.getCodigo() + " - " + plan.getNombre());
+            escritor.linea(fuenteTexto, 12, "Vigente desde " + plan.getVigenciaDesde());
             escritor.espacio();
 
             if (materias.isEmpty()) {
                 escritor.linea(fuenteTexto, 11, "El plan no tiene asignaturas cargadas.");
             }
             for (Asignatura materia : materias) {
-                escritor.linea(fuenteTitulo, 12, materia.getCuatrimestreSugerido() + "o cuatrimestre - "
+                escritor.linea(fuenteTitulo, 12, materia.getAnio() + " - "
                         + materia.getCodigo() + " - " + materia.getNombre()
                         + " (" + materia.getCargaHoraria() + " hs)");
                 List<Correlatividad> correlativasMateria = correlatividades.findByAsignaturaId(materia.getId());

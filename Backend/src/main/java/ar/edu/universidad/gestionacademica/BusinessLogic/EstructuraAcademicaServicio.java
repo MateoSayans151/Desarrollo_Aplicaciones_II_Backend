@@ -24,7 +24,9 @@ public class EstructuraAcademicaServicio {
         if (carreras.existsByCodigoIgnoreCase(dto.codigo())) {
             throw new ReglaNegocioException("Ya existe una carrera con el codigo indicado");
         }
-        return carrera(carreras.save(Carrera.builder().codigo(dto.codigo()).nombre(dto.nombre()).build()));
+        Carrera entidad = Carrera.builder().codigo(dto.codigo()).nombre(dto.nombre())
+                .facultad(dto.facultad()).duracion(dto.duracion()).titulo(dto.titulo()).build();
+        return carrera(carreras.save(entidad));
     }
 
     @Transactional(readOnly = true)
@@ -36,18 +38,21 @@ public class EstructuraAcademicaServicio {
         Carrera entidad = buscarCarrera(id);
         entidad.setCodigo(dto.codigo());
         entidad.setNombre(dto.nombre());
+        entidad.setFacultad(dto.facultad());
+        entidad.setDuracion(dto.duracion());
+        entidad.setTitulo(dto.titulo());
         return carrera(entidad);
     }
 
     public void eliminarCarrera(Long id) {
         Carrera entidad = buscarCarrera(id);
-        entidad.setActiva(false);
+        entidad.setEstado(EstadoAcademico.INACTIVA);
     }
 
     public PlanRespuestaDto crearPlan(Long carreraId, CrearPlanDto dto) {
-        validarRango(dto.vigenciaDesde(), dto.vigenciaHasta(), "vigencia del plan");
-        PlanEstudio plan = PlanEstudio.builder().version(dto.version()).vigenciaDesde(dto.vigenciaDesde())
-                .vigenciaHasta(dto.vigenciaHasta()).carrera(buscarCarrera(carreraId)).build();
+        PlanEstudio plan = PlanEstudio.builder().codigo(dto.codigo()).nombre(dto.nombre())
+                .vigenciaDesde(dto.vigenciaDesde()).cantidadAsignaturas(dto.cantidadAsignaturas())
+                .carrera(buscarCarrera(carreraId)).build();
         return plan(planes.save(plan));
     }
 
@@ -59,7 +64,7 @@ public class EstructuraAcademicaServicio {
 
     public AsignaturaRespuestaDto crearAsignatura(Long planId, CrearAsignaturaDto dto) {
         Asignatura asignatura = Asignatura.builder().codigo(dto.codigo()).nombre(dto.nombre())
-                .cuatrimestreSugerido(dto.cuatrimestreSugerido()).cargaHoraria(dto.cargaHoraria())
+                .anio(dto.anio()).creditos(dto.creditos()).cargaHoraria(dto.cargaHoraria())
                 .plan(buscarPlan(planId)).build();
         return asignatura(asignaturas.save(asignatura));
     }
@@ -67,7 +72,7 @@ public class EstructuraAcademicaServicio {
     @Transactional(readOnly = true)
     public List<AsignaturaRespuestaDto> listarAsignaturas(Long planId) {
         buscarPlan(planId);
-        return asignaturas.findByPlanIdOrderByCuatrimestreSugeridoAscNombreAsc(planId)
+        return asignaturas.findByPlanIdOrderByNombreAsc(planId)
                 .stream().map(this::asignatura).toList();
     }
 
@@ -100,11 +105,17 @@ public class EstructuraAcademicaServicio {
     private Asignatura buscarAsignatura(Long id) {
         return asignaturas.findById(id).orElseThrow(() -> new RecursoNoEncontradoException("Asignatura no encontrada"));
     }
-    private void validarRango(java.time.LocalDate inicio, java.time.LocalDate fin, String nombre) {
-        if (fin != null && !fin.isAfter(inicio)) throw new ReglaNegocioException("El fin de " + nombre + " debe ser posterior al inicio");
+    private CarreraRespuestaDto carrera(Carrera c) {
+        return new CarreraRespuestaDto(c.getId(), c.getCodigo(), c.getNombre(), c.getFacultad(),
+                c.getDuracion(), c.getTitulo(), c.getEstado());
     }
-    private CarreraRespuestaDto carrera(Carrera c) { return new CarreraRespuestaDto(c.getId(), c.getCodigo(), c.getNombre(), c.isActiva()); }
-    private PlanRespuestaDto plan(PlanEstudio p) { return new PlanRespuestaDto(p.getId(), p.getVersion(), p.getVigenciaDesde(), p.getVigenciaHasta(), p.getCarrera().getId()); }
-    private AsignaturaRespuestaDto asignatura(Asignatura a) { return new AsignaturaRespuestaDto(a.getId(), a.getCodigo(), a.getNombre(), a.getCuatrimestreSugerido(), a.getCargaHoraria(), a.getPlan().getId()); }
+    private PlanRespuestaDto plan(PlanEstudio p) {
+        return new PlanRespuestaDto(p.getId(), p.getCodigo(), p.getNombre(), p.getVigenciaDesde(),
+                p.getCantidadAsignaturas(), p.getEstado(), p.getCarrera().getId());
+    }
+    private AsignaturaRespuestaDto asignatura(Asignatura a) {
+        return new AsignaturaRespuestaDto(a.getId(), a.getCodigo(), a.getNombre(), a.getAnio(),
+                a.getCreditos(), a.getCargaHoraria(), a.getEstado(), a.getPlan().getId());
+    }
     private CorrelatividadRespuestaDto correlatividad(Correlatividad c) { return new CorrelatividadRespuestaDto(c.getId(), c.getAsignatura().getId(), c.getCorrelativa().getId(), c.getTipo()); }
 }

@@ -14,10 +14,15 @@ public class Asignatura {
     private String codigo;
     @NotBlank @Column(nullable = false)
     private String nombre;
-    @Min(1) @Max(10) @Column(nullable = false)
-    private int cuatrimestreSugerido;
+    @NotBlank @Column(nullable = false)
+    private String anio;
+    @Positive @Column(nullable = false)
+    private int creditos;
     @Positive @Column(nullable = false)
     private int cargaHoraria;
+    @Enumerated(EnumType.STRING) @Column(nullable = false)
+    @Builder.Default
+    private EstadoAcademico estado = EstadoAcademico.ACTIVA;
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "plan_id", nullable = false)
     private PlanEstudio plan;

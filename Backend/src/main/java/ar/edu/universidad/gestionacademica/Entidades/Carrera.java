@@ -14,7 +14,13 @@ public class Carrera {
     private String codigo;
     @NotBlank @Column(nullable = false)
     private String nombre;
-    @Column(nullable = false)
+    @NotBlank @Column(nullable = false)
+    private String facultad;
+    @NotBlank @Column(nullable = false)
+    private String duracion;
+    @NotBlank @Column(nullable = false)
+    private String titulo;
+    @Enumerated(EnumType.STRING) @Column(nullable = false)
     @Builder.Default
-    private boolean activa = true;
+    private EstadoAcademico estado = EstadoAcademico.ACTIVA;
 }

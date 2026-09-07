@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface AsignaturaRepositorio extends JpaRepository<Asignatura, Long> {
-    List<Asignatura> findByPlanIdOrderByCuatrimestreSugeridoAscNombreAsc(Long planId);
+    List<Asignatura> findByPlanIdOrderByNombreAsc(Long planId);
 }
