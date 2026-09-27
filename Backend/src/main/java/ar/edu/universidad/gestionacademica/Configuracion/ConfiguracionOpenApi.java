@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class ConfiguracionOpenApi {
-    private static final String SEGURIDAD_BASIC = "autenticacionBasic";
+    private static final String SEGURIDAD_BEARER = "coreBearer";
 
     @Bean
     OpenAPI gestionAcademicaOpenApi() {
@@ -21,12 +21,13 @@ public class ConfiguracionOpenApi {
                         .description("Administracion de carreras, planes, asignaturas, aulas, periodos y regularidad.")
                         .version("1.0.0")
                         .contact(new Contact().name("Secretaria Academica")))
-                .addSecurityItem(new SecurityRequirement().addList(SEGURIDAD_BASIC))
+                .addSecurityItem(new SecurityRequirement().addList(SEGURIDAD_BEARER))
                 .components(new Components().addSecuritySchemes(
-                        SEGURIDAD_BASIC,
+                        SEGURIDAD_BEARER,
                         new SecurityScheme()
-                                .name(SEGURIDAD_BASIC)
+                                .name(SEGURIDAD_BEARER)
                                 .type(SecurityScheme.Type.HTTP)
-                                .scheme("basic")));
+                                .scheme("bearer")
+                                .bearerFormat("JWT")));
     }
 }

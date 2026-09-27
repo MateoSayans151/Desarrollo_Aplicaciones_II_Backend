@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import static ar.edu.universidad.gestionacademica.Modelos.RegularidadDto.*;
 
 @RestController
-@RequestMapping("/api/regularidad")
+@RequestMapping("/api/v1/regularidad")
 @RequiredArgsConstructor
 public class RegularidadController {
     private final RegularidadServicio servicio;

@@ -2,6 +2,21 @@
 
 Backend MVC/REST construido con Spring Boot 3, Java 17, Spring Data JPA, Spring Security y PostgreSQL (Supabase).
 
+## Integración con CORE
+
+Este servicio no expone login propio: recibe JWT de usuario validados con el JWKS de CORE.
+Definí estas variables fuera de Git antes de desplegar:
+
+```text
+CORE_JWT_JWK_SET_URI=https://core/.well-known/jwks.json
+CORE_JWT_ISSUER=https://core
+CORE_JWT_AUDIENCE=academic-service
+```
+
+El gateway publica el módulo como `/api/v1/academic/*` y lo reescribe a los endpoints
+internos `/api/v1/*` de este servicio. Las comprobaciones de vida están en
+`GET /health/live` y `GET /health/ready`.
+
 ## Estructura
 
 - `Entidades`: modelo persistente del dominio.

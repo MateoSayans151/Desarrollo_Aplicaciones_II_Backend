@@ -1,17 +1,22 @@
 package ar.edu.universidad.gestionacademica.Configuracion;
 
-import ar.edu.universidad.gestionacademica.Entidades.Usuario;
-import ar.edu.universidad.gestionacademica.Repositorios.UsuarioRepositorio;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -23,90 +28,54 @@ import java.util.List;
 @Configuration
 public class ConfiguracionSeguridad {
     @Bean
-    SecurityFilterChain filtros(HttpSecurity http, CorsConfigurationSource origenesCors) throws Exception {
+    SecurityFilterChain filtros(HttpSecurity http, CorsConfigurationSource origenesCors,
+                                JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
         return http
                 .cors(cors -> cors.configurationSource(origenesCors))
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**", "/h2-console/**"))
-                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/h2-console/**", "/swagger-ui/**", "/swagger-ui.html",
-                                "/v3/api-docs/**", "/api/usuarios/login", "/api/usuarios/logout").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/academica/**", "/api/planificacion/**")
-                                .hasAnyRole("ADMINISTRATIVO", "USUARIO")
-                        .anyRequest().hasRole("ADMINISTRATIVO"))
-                .httpBasic(Customizer.withDefaults())
+                        .requestMatchers("/health/live", "/health/ready", "/swagger-ui/**", "/swagger-ui.html",
+                                "/v3/api-docs/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/academica/**", "/api/v1/planificacion/**")
+                                .hasAnyAuthority("ROLE_ADMINISTRATIVO", "ROLE_ACADEMIC_ADMIN")
+                        .requestMatchers("/api/v1/**").hasAnyAuthority("ROLE_ADMINISTRATIVO", "ROLE_ACADEMIC_ADMIN")
+                        .anyRequest().denyAll())
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .build();
     }
 
-    /**
-     * El frontend usa cookies de sesion (no un token Bearer), asi que el origen
-     * permitido no puede ser "*": tiene que ser explicito para poder mandar
-     * Access-Control-Allow-Credentials junto con el origen real.
-     */
+    @Bean
+    NimbusJwtDecoder jwtDecoder(@Value("${core.jwt.jwk-set-uri}") String jwkSetUri,
+                                @Value("${core.jwt.issuer}") String issuer,
+                                @Value("${core.jwt.audience}") String audience) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+        OAuth2TokenValidator<Jwt> audienceValidator = jwt -> jwt.getAudience().contains(audience)
+                ? OAuth2TokenValidatorResult.success()
+                : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Audience invalida", null));
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(JwtValidators.createDefaultWithIssuer(issuer), audienceValidator));
+        return decoder;
+    }
+
+    @Bean
+    JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+            List<String> roles = jwt.getClaimAsStringList("roles");
+            if (roles == null) return List.of();
+            return roles.stream().<GrantedAuthority>map(role -> new SimpleGrantedAuthority("ROLE_" + role)).toList();
+        });
+        return converter;
+    }
+
     @Bean
     CorsConfigurationSource origenesCors(@Value("${cors.allowed-origins:http://localhost:5173}") String origenesPermitidos) {
         CorsConfiguration configuracion = new CorsConfiguration();
         configuracion.setAllowedOrigins(Arrays.asList(origenesPermitidos.split(",")));
         configuracion.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuracion.setAllowedHeaders(List.of("Content-Type", "Authorization"));
-        configuracion.setAllowCredentials(true);
+        configuracion.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-Correlation-Id"));
         UrlBasedCorsConfigurationSource fuente = new UrlBasedCorsConfigurationSource();
         fuente.registerCorsConfiguration("/**", configuracion);
         return fuente;
-    }
-
-    @Bean
-    AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
-        return configuration.getAuthenticationManager();
-    }
-
-    @Bean
-    CommandLineRunner crearAdministradorInicial(
-            UsuarioRepositorio usuarios,
-            PasswordEncoder encoder,
-            @Value("${universidad.admin.email}") String email,
-            @Value("${universidad.admin.password}") String clave,
-            @Value("${universidad.dominio-email}") String dominio) {
-        if (!email.toLowerCase().endsWith("@" + dominio.toLowerCase())) {
-            throw new IllegalStateException("El administrador debe utilizar un mail del dominio universitario configurado");
-        }
-        return args -> {
-            if (!usuarios.existsByEmailIgnoreCase(email)) {
-                usuarios.save(Usuario.builder()
-                        .nombre("Administrador academico")
-                        .email(email.toLowerCase())
-                        .password(encoder.encode(clave))
-                        .permiso(Usuario.Permiso.ADMINISTRATIVO)
-                        .build());
-            }
-        };
-    }
-
-    /**
-     * Usuario fijo que el frontend usa para decidir el modo demo: si el que
-     * inicia sesion es este, la app muestra los mocks locales en vez de pedir
-     * datos reales al backend (ver app/modoDemo.ts en el frontend).
-     */
-    @Bean
-    CommandLineRunner crearUsuarioDemo(
-            UsuarioRepositorio usuarios,
-            PasswordEncoder encoder,
-            @Value("${universidad.demo.email:demo@universidad.edu.ar}") String email,
-            @Value("${universidad.demo.password:DemoMocks123!}") String clave) {
-        return args -> {
-            if (!usuarios.existsByEmailIgnoreCase(email)) {
-                usuarios.save(Usuario.builder()
-                        .nombre("Usuario demo")
-                        .email(email.toLowerCase())
-                        .password(encoder.encode(clave))
-                        .permiso(Usuario.Permiso.ADMINISTRATIVO)
-                        .build());
-            }
-        };
-    }
-
-    @Bean
-    PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 }

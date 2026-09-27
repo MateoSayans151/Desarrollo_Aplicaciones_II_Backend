@@ -12,7 +12,7 @@ import java.util.List;
 import static ar.edu.universidad.gestionacademica.Modelos.EstructuraAcademicaDto.*;
 
 @RestController
-@RequestMapping("/api/academica")
+@RequestMapping("/api/v1/academica")
 @RequiredArgsConstructor
 public class EstructuraAcademicaController {
     private final EstructuraAcademicaServicio servicio;
