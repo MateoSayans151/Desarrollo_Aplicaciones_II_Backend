@@ -12,7 +12,7 @@ import java.util.List;
 import static ar.edu.universidad.gestionacademica.Modelos.PlanificacionDto.*;
 
 @RestController
-@RequestMapping("/api/v1/planificacion")
+@RequestMapping("/api/planificacion")
 @RequiredArgsConstructor
 public class PlanificacionController {
     private final PlanificacionServicio servicio;
