@@ -1,0 +1,147 @@
+package ar.edu.universidad.gestionacademica.BusinessLogic;
+
+import ar.edu.universidad.gestionacademica.Entidades.*;
+import ar.edu.universidad.gestionacademica.Excepciones.*;
+import ar.edu.universidad.gestionacademica.Repositorios.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.List;
+
+import static ar.edu.universidad.gestionacademica.Modelos.CursoDto.*;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class CursoServicio {
+    private final CursoRepositorio cursos;
+    private final AsignaturaRepositorio asignaturas;
+    private final PeriodoAcademicoRepositorio periodos;
+    private final SedeRepositorio sedes;
+    private final AulaRepositorio aulas;
+    private final CursoDocenteRepositorio cursoDocentes;
+    private final InscripcionCursoRepositorio inscripciones;
+    private final HorarioCursoRepositorio horarios;
+
+    public CursoRespuestaDto crear(CrearCursoDto dto) {
+        PeriodoAcademico periodo = periodos.findById(dto.periodoId())
+                .orElseThrow(() -> new RecursoNoEncontradoException("Periodo académico no encontrado"));
+        validarFechas(dto.fechaInicio(), dto.fechaFin(), periodo);
+        Curso curso = cursos.save(Curso.builder()
+                .codigo(dto.codigo().trim()).asignatura(buscarAsignatura(dto.asignaturaId())).periodo(periodo)
+                .sede(buscarSede(dto.sedeId())).modalidad(dto.modalidad()).cupoMaximo(dto.cupoMaximo())
+                .fechaInicio(dto.fechaInicio()).fechaFin(dto.fechaFin()).build());
+        return respuesta(curso);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CursoRespuestaDto> listar(Long periodoId) {
+        List<Curso> encontrados = periodoId == null ? cursos.findAll() : cursos.findByPeriodoIdOrderByCodigo(periodoId);
+        return encontrados.stream().map(this::respuesta).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public CursoDetalleRespuestaDto detalle(Long cursoId) {
+        Curso curso = buscarCurso(cursoId);
+        return new CursoDetalleRespuestaDto(respuesta(curso),
+                cursoDocentes.findByCursoIdOrderById(cursoId).stream().map(this::respuesta).toList(),
+                inscripciones.findByCursoIdOrderByAlumnoId(cursoId).stream().map(this::respuesta).toList(),
+                horarios.findByCursoIdOrderByDiaSemanaHoraInicio(cursoId).stream().map(this::respuesta).toList());
+    }
+
+    public CursoDocenteRespuestaDto asignarDocente(Long cursoId, CrearCursoDocenteDto dto) {
+        Curso curso = buscarCurso(cursoId);
+        if (cursoDocentes.existsByCursoIdAndDocenteId(cursoId, dto.docenteId())) {
+            throw new ReglaNegocioException("El docente ya está asignado al curso");
+        }
+        CursoDocente asignacion = cursoDocentes.save(CursoDocente.builder().curso(curso)
+                .docenteId(dto.docenteId().trim()).rol(dto.rol()).build());
+        return respuesta(asignacion);
+    }
+
+    public CursoRespuestaDto actualizarEstado(Long cursoId, ActualizarEstadoCursoDto dto) {
+        Curso curso = buscarCurso(cursoId);
+        curso.setEstado(dto.estado());
+        return respuesta(curso);
+    }
+
+    public InscripcionCursoRespuestaDto inscribirAlumno(Long cursoId, CrearInscripcionCursoDto dto) {
+        Curso curso = buscarCurso(cursoId);
+        if (curso.getEstado() == EstadoCurso.CANCELADO) {
+            throw new ReglaNegocioException("No se permiten inscripciones en un curso cancelado");
+        }
+        if (inscripciones.findByCursoIdAndAlumnoId(cursoId, dto.alumnoId().trim()).isPresent()) {
+            throw new ReglaNegocioException("El alumno ya se encuentra inscripto en el curso");
+        }
+        if (inscripciones.countByCursoIdAndEstadoNot(cursoId, EstadoInscripcionCurso.BAJA) >= curso.getCupoMaximo()) {
+            throw new ReglaNegocioException("El curso alcanzó su cupo máximo");
+        }
+        InscripcionCurso inscripcion = inscripciones.save(InscripcionCurso.builder().curso(curso)
+                .alumnoId(dto.alumnoId().trim()).fechaInscripcion(LocalDate.now()).build());
+        return respuesta(inscripcion);
+    }
+
+    public InscripcionCursoRespuestaDto actualizarInscripcion(Long cursoId, String alumnoId,
+                                                                ActualizarInscripcionCursoDto dto) {
+        InscripcionCurso inscripcion = inscripciones.findByCursoIdAndAlumnoId(cursoId, alumnoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Inscripción no encontrada"));
+        inscripcion.setEstado(dto.estado());
+        inscripcion.setNotaFinal(dto.notaFinal());
+        inscripcion.setFechaResultado(dto.fechaResultado());
+        return respuesta(inscripcion);
+    }
+
+    public HorarioCursoRespuestaDto agregarHorario(Long cursoId, CrearHorarioCursoDto dto) {
+        Curso curso = buscarCurso(cursoId);
+        if (!dto.horaFin().isAfter(dto.horaInicio())) {
+            throw new ReglaNegocioException("La hora de fin debe ser posterior a la de inicio");
+        }
+        Aula aula = aulas.findById(dto.aulaId()).orElseThrow(() -> new RecursoNoEncontradoException("Aula no encontrada"));
+        if (!aula.getSede().getId().equals(curso.getSede().getId())) {
+            throw new ReglaNegocioException("El aula debe pertenecer a la sede del curso");
+        }
+        if (curso.getCupoMaximo() > aula.getCapacidadMaxima()) {
+            throw new ReglaNegocioException("El cupo del curso supera la capacidad del aula");
+        }
+        if (horarios.existsByAulaIdAndDiaSemanaAndCursoPeriodoIdAndHoraInicioLessThanAndHoraFinGreaterThan(
+                aula.getId(), dto.diaSemana(), curso.getPeriodo().getId(), dto.horaFin(), dto.horaInicio())) {
+            throw new ReglaNegocioException("El aula ya está ocupada en ese horario durante el período del curso");
+        }
+        HorarioCurso horario = horarios.save(HorarioCurso.builder().curso(curso).aula(aula)
+                .diaSemana(dto.diaSemana()).horaInicio(dto.horaInicio()).horaFin(dto.horaFin()).build());
+        return respuesta(horario);
+    }
+
+    private Curso buscarCurso(Long id) {
+        return cursos.findById(id).orElseThrow(() -> new RecursoNoEncontradoException("Curso no encontrado"));
+    }
+    private Asignatura buscarAsignatura(Long id) {
+        return asignaturas.findById(id).orElseThrow(() -> new RecursoNoEncontradoException("Asignatura no encontrada"));
+    }
+    private Sede buscarSede(Long id) {
+        return sedes.findById(id).orElseThrow(() -> new RecursoNoEncontradoException("Sede no encontrada"));
+    }
+    private void validarFechas(LocalDate inicio, LocalDate fin, PeriodoAcademico periodo) {
+        if (!fin.isAfter(inicio)) throw new ReglaNegocioException("La fecha de fin debe ser posterior a la fecha de inicio");
+        if (inicio.isBefore(periodo.getFechaInicio()) || fin.isAfter(periodo.getFechaFin())) {
+            throw new ReglaNegocioException("Las fechas del curso deben estar comprendidas en su período académico");
+        }
+    }
+    private CursoRespuestaDto respuesta(Curso c) {
+        return new CursoRespuestaDto(c.getId(), c.getCodigo(), c.getAsignatura().getId(), c.getPeriodo().getId(),
+                c.getSede().getId(), c.getModalidad(), c.getEstado(), c.getCupoMaximo(), c.getFechaInicio(),
+                c.getFechaFin(), inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA));
+    }
+    private CursoDocenteRespuestaDto respuesta(CursoDocente cd) {
+        return new CursoDocenteRespuestaDto(cd.getId(), cd.getDocenteId(), cd.getRol());
+    }
+    private InscripcionCursoRespuestaDto respuesta(InscripcionCurso i) {
+        return new InscripcionCursoRespuestaDto(i.getId(), i.getAlumnoId(), i.getFechaInscripcion(), i.getEstado(),
+                i.getNotaFinal(), i.getFechaResultado());
+    }
+    private HorarioCursoRespuestaDto respuesta(HorarioCurso h) {
+        return new HorarioCursoRespuestaDto(h.getId(), h.getAula().getId(), h.getDiaSemana(), h.getHoraInicio(), h.getHoraFin());
+    }
+}

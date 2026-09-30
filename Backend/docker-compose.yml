@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gestion-academica-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gestion_academica
+      POSTGRES_USER: gestion_academica
+      POSTGRES_PASSWORD: gestion_academica_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gestion_academica -d gestion_academica"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
