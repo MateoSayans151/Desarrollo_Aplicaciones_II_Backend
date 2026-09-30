@@ -32,6 +32,7 @@ internos `/api/v1/*` de este servicio. Las comprobaciones de vida están en
 - Carreras, planes de estudio, asignaturas y correlatividades.
 - Sedes, aulas, capacidad, agenda y detección de superposición horaria.
 - Cuatrimestres y turnos de examen final.
+- Cursos/comisiones por cuatrimestre, con docentes, inscripciones y horarios de aula.
 - Validación de regularidad por asistencia y promedio.
 - Usuarios persistidos, login por sesión y autorización por permiso administrativo.
 
@@ -85,6 +86,12 @@ para testear la API:
 | POST | `/api/planificacion/asignaciones` | Asignar un aula |
 | GET | `/api/planificacion/aulas/{id}/agenda?fecha=AAAA-MM-DD` | Consultar agenda |
 | POST / GET | `/api/planificacion/periodos` | Crear/listar cuatrimestres |
+| POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=` |
+| GET | `/api/planificacion/cursos/{id}` | Consultar curso, docentes, inscripciones y horarios |
+| PUT | `/api/planificacion/cursos/{id}/estado` | Actualizar estado del curso |
+| POST | `/api/planificacion/cursos/{id}/docentes` | Asignar docente externo al curso |
+| POST / PUT | `/api/planificacion/cursos/{id}/inscripciones` | Inscribir alumno o actualizar su resultado |
+| POST | `/api/planificacion/cursos/{id}/horarios` | Agregar aula y horario semanal |
 | POST / GET | `/api/planificacion/turnos-examen` | Crear/listar turnos |
 | POST | `/api/regularidad/validar` | Validar habilitación a final |
 | POST | `/api/usuarios/login` | Iniciar sesión |
