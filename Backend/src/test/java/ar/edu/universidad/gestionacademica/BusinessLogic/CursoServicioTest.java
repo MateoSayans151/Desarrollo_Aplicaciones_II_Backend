@@ -44,7 +44,7 @@ class CursoServicioTest {
         when(cursos.findById(42L)).thenReturn(Optional.of(curso));
         when(cursoDocentes.findByCursoIdOrderById(42L)).thenReturn(List.of());
         when(inscripciones.findByCursoIdOrderByAlumnoId(42L)).thenReturn(List.of());
-        when(horarios.findByCursoIdOrderByDiaSemanaHoraInicio(42L)).thenReturn(List.of());
+        when(horarios.findByCursoIdOrderByDiaSemanaAscHoraInicioAsc(42L)).thenReturn(List.of());
         when(inscripciones.countByCursoIdAndEstadoNot(42L, EstadoInscripcionCurso.BAJA)).thenReturn(0L);
 
         var detalle = servicio.detalle(42L);

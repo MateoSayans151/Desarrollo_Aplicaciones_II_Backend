@@ -50,7 +50,7 @@ public class CursoServicio {
         return new CursoDetalleAcademicoRespuestaDto(respuestaAcademica(curso),
                 cursoDocentes.findByCursoIdOrderById(cursoId).stream().map(this::respuesta).toList(),
                 inscripciones.findByCursoIdOrderByAlumnoId(cursoId).stream().map(this::respuesta).toList(),
-                horarios.findByCursoIdOrderByDiaSemanaHoraInicio(cursoId).stream().map(this::respuesta).toList());
+                horarios.findByCursoIdOrderByDiaSemanaAscHoraInicioAsc(cursoId).stream().map(this::respuesta).toList());
     }
 
     public CursoDocenteRespuestaDto asignarDocente(Long cursoId, CrearCursoDocenteDto dto) {

@@ -8,7 +8,7 @@ import java.time.LocalTime;
 import java.util.List;
 
 public interface HorarioCursoRepositorio extends JpaRepository<HorarioCurso, Long> {
-    List<HorarioCurso> findByCursoIdOrderByDiaSemanaHoraInicio(Long cursoId);
+    List<HorarioCurso> findByCursoIdOrderByDiaSemanaAscHoraInicioAsc(Long cursoId);
     boolean existsByAulaIdAndDiaSemanaAndCursoPeriodoIdAndHoraInicioLessThanAndHoraFinGreaterThan(
             Long aulaId, DayOfWeek diaSemana, Long periodoId, LocalTime horaFin, LocalTime horaInicio);
 }

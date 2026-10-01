@@ -152,6 +152,33 @@ Respuesta:
 
 Los valores admitidos para `estado` son `INSCRIPTO`, `CURSANDO`, `BAJA`, `REGULAR`, `LIBRE`, `APROBADO` y `DESAPROBADO`. `notaFinal` puede ser nula o estar entre 0 y 10.
 
+## Correlatividades
+
+### Consultar correlatividades de una asignatura
+
+`GET /api/academica/asignaturas/{asignaturaId}/correlatividades`
+
+Devuelve las asignaturas que deben estar regularizadas o aprobadas para cursar la asignatura indicada:
+
+```json
+[
+  {
+    "id": 5,
+    "asignaturaId": 15,
+    "correlativaId": 12,
+    "tipo": "APROBADA"
+  },
+  {
+    "id": 6,
+    "asignaturaId": 15,
+    "correlativaId": 13,
+    "tipo": "REGULAR"
+  }
+]
+```
+
+`APROBADA` requiere que la asignatura correlativa esté aprobada. `REGULAR` admite que esté regular o aprobada. El endpoint ya está implementado, pero actualmente su lectura requiere `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN`; para consumirlo con credenciales del módulo de Alumnos hay que autorizar el rol correspondiente en Seguridad.
+
 ## Calendario: turnos de examen
 
 ### Listar períodos académicos
@@ -217,6 +244,7 @@ Los módulos pueden copiar estos modelos mínimos para desarrollar con datos loc
 | `Curso` | `id: Long`, `codigo: String`, `asignaturaId: Long`, `periodoId: Long`, `sedeId: Long`, `modalidad: ModalidadCurso`, `estado: EstadoCurso`, `cupoMaximo: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate` |
 | `InscripcionCurso` | `id: Long`, `cursoId: Long`, `alumnoId: String`, `fechaInscripcion: LocalDate`, `estado: EstadoInscripcionCurso`, `notaFinal: BigDecimal?`, `fechaResultado: LocalDate?` |
 | `Asignatura` | `id: Long`, `codigo: String`, `nombre: String`, `anio: String`, `creditos: int`, `cargaHoraria: int`, `estado: EstadoAcademico`, `planId: Long` |
+| `Correlatividad` | `id: Long`, `asignaturaId: Long`, `correlativaId: Long`, `tipo: Correlatividad.Tipo` |
 | `PeriodoAcademico` | `id: Long`, `anio: int`, `numero: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `inscripcionDesde: LocalDate`, `inscripcionHasta: LocalDate` |
 | `TurnoExamen` | `id: Long`, `nombre: String`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `inscripcionDesde: LocalDate`, `inscripcionHasta: LocalDate` |
 | `CursoDocente` | `id: Long`, `cursoId: Long`, `docenteId: String`, `rol: RolDocenteCurso` |
@@ -229,6 +257,7 @@ Enumeraciones usadas por estos modelos:
 - `EstadoCurso`: `PLANIFICADO`, `EN_CURSO`, `FINALIZADO`, `CANCELADO`.
 - `EstadoInscripcionCurso`: `INSCRIPTO`, `CURSANDO`, `BAJA`, `REGULAR`, `LIBRE`, `APROBADO`, `DESAPROBADO`.
 - `RolDocenteCurso`: `TITULAR`, `ADJUNTO`, `AUXILIAR`.
+- `Correlatividad.Tipo`: `REGULAR`, `APROBADA`.
 - `ModalidadCurso` y `EstadoAcademico`: replicar los valores del servicio antes de intercambiar esos campos.
 
 Para mantener los ejemplos en sincronía, los campos de respuesta reflejan los DTOs del backend. El modelo local de otro módulo puede ser más pequeño, pero debe conservar el significado y los identificadores compartidos.

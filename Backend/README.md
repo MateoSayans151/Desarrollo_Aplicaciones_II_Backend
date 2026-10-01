@@ -41,9 +41,36 @@ y `GET /health/ready`.
 
 Requiere JDK 17 y Maven 3.9 o superior.
 
-```bash
-mvn spring-boot:run
+### Conectar a Supabase
+
+Configurá `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` en `.env` con los datos
+de **Supabase > Connect**. La plantilla `.env.supabase.example` muestra el formato
+esperado para JDBC. Usá el host, puerto y usuario que te da el panel; no copies
+la URI `postgresql://...` sin convertirla a `jdbc:postgresql://...`.
+
+Para Supabase, no actives el perfil `local`; dejá comentada
+`SPRING_PROFILES_ACTIVE=local`. Iniciá desde esta carpeta:
+
+```powershell
+.\mvnw.cmd spring-boot:run
 ```
+
+La base debe tener el esquema vigente. En particular, `periodos_academicos`
+incluye `inscripcion_desde` e `inscripcion_hasta`, ambas fechas obligatorias.
+Al recuperar una base creada con una versión anterior, aplicá una migración de
+datos antes de usar `DDL_AUTO=update`: PostgreSQL no puede agregar una columna
+obligatoria sobre períodos existentes sin asignarles un valor.
+
+### Conectar al PostgreSQL de Docker
+
+Desde esta carpeta, iniciá Docker y el perfil local:
+
+```powershell
+docker compose up -d
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
+```
+
+Este perfil usa las variables `LOCAL_DB_*` de `.env`.
 
 La API queda disponible en `http://localhost:8080`. Por defecto utiliza:
 
