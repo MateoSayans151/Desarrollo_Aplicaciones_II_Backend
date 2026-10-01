@@ -13,9 +13,10 @@ CORE_JWT_ISSUER=https://core
 CORE_JWT_AUDIENCE=academic-service
 ```
 
-El gateway publica el módulo como `/api/v1/academic/*` y lo reescribe a los endpoints
-internos `/api/v1/*` de este servicio. Las comprobaciones de vida están en
-`GET /health/live` y `GET /health/ready`.
+Los endpoints de este servicio se implementan bajo `/api/planificacion`,
+`/api/academica` y otros controladores del módulo. La ruta externa del gateway
+se configura por separado. Las comprobaciones de vida están en `GET /health/live`
+y `GET /health/ready`.
 
 ## Estructura
 

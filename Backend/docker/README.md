@@ -28,3 +28,14 @@ docker compose up -d
 ```
 
 Usuario de prueba: `admin@universidad.edu.ar` / `CambiarEstaClave123!`.
+
+Las columnas para vincular sedes y aulas con Backoffice ya están en el esquema
+de volúmenes nuevos. Para una base existente, aplicar manualmente
+`docker/migrations/02-backoffice-sites-and-locations.sql`.
+
+### Cambios de esquema
+
+El período académico ahora incluye `inscripcionDesde` e `inscripcionHasta`.
+Si el volumen `postgres_data` ya existía antes de este cambio y es sólo de
+desarrollo, recrealo con los comandos anteriores. Esto borra los datos locales;
+no lo uses para una base con información que debas conservar.

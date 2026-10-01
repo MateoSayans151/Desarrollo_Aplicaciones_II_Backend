@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 import static ar.edu.universidad.gestionacademica.Modelos.CursoDto.*;
 
@@ -24,6 +25,7 @@ public class CursoServicio {
     private final CursoDocenteRepositorio cursoDocentes;
     private final InscripcionCursoRepositorio inscripciones;
     private final HorarioCursoRepositorio horarios;
+    private final CorrelatividadRepositorio correlatividades;
 
     public CursoRespuestaDto crear(CrearCursoDto dto) {
         PeriodoAcademico periodo = periodos.findById(dto.periodoId())
@@ -43,9 +45,9 @@ public class CursoServicio {
     }
 
     @Transactional(readOnly = true)
-    public CursoDetalleRespuestaDto detalle(Long cursoId) {
+    public CursoDetalleAcademicoRespuestaDto detalle(Long cursoId) {
         Curso curso = buscarCurso(cursoId);
-        return new CursoDetalleRespuestaDto(respuesta(curso),
+        return new CursoDetalleAcademicoRespuestaDto(respuestaAcademica(curso),
                 cursoDocentes.findByCursoIdOrderById(cursoId).stream().map(this::respuesta).toList(),
                 inscripciones.findByCursoIdOrderByAlumnoId(cursoId).stream().map(this::respuesta).toList(),
                 horarios.findByCursoIdOrderByDiaSemanaHoraInicio(cursoId).stream().map(this::respuesta).toList());
@@ -72,12 +74,14 @@ public class CursoServicio {
         if (curso.getEstado() == EstadoCurso.CANCELADO) {
             throw new ReglaNegocioException("No se permiten inscripciones en un curso cancelado");
         }
+        validarVentanaInscripcion(curso.getPeriodo());
         if (inscripciones.findByCursoIdAndAlumnoId(cursoId, dto.alumnoId().trim()).isPresent()) {
             throw new ReglaNegocioException("El alumno ya se encuentra inscripto en el curso");
         }
         if (inscripciones.countByCursoIdAndEstadoNot(cursoId, EstadoInscripcionCurso.BAJA) >= curso.getCupoMaximo()) {
             throw new ReglaNegocioException("El curso alcanzó su cupo máximo");
         }
+        validarCorrelatividades(dto.alumnoId().trim(), curso.getAsignatura().getId());
         InscripcionCurso inscripcion = inscripciones.save(InscripcionCurso.builder().curso(curso)
                 .alumnoId(dto.alumnoId().trim()).fechaInscripcion(LocalDate.now()).build());
         return respuesta(inscripcion);
@@ -99,6 +103,9 @@ public class CursoServicio {
             throw new ReglaNegocioException("La hora de fin debe ser posterior a la de inicio");
         }
         Aula aula = aulas.findById(dto.aulaId()).orElseThrow(() -> new RecursoNoEncontradoException("Aula no encontrada"));
+        if (aula.getTipo() != TipoUbicacion.AULA) {
+            throw new ReglaNegocioException("Solo se pueden asignar ubicaciones de tipo AULA a un curso");
+        }
         if (!aula.getSede().getId().equals(curso.getSede().getId())) {
             throw new ReglaNegocioException("El aula debe pertenecer a la sede del curso");
         }
@@ -129,10 +136,39 @@ public class CursoServicio {
             throw new ReglaNegocioException("Las fechas del curso deben estar comprendidas en su período académico");
         }
     }
+    private void validarVentanaInscripcion(PeriodoAcademico periodo) {
+        LocalDate hoy = LocalDate.now();
+        if (hoy.isBefore(periodo.getInscripcionDesde()) || hoy.isAfter(periodo.getInscripcionHasta())) {
+            throw new ReglaNegocioException("La inscripcion se encuentra fuera de la ventana habilitada para el cuatrimestre");
+        }
+    }
+    private void validarCorrelatividades(String alumnoId, Long asignaturaId) {
+        for (Correlatividad correlatividad : correlatividades.findByAsignaturaId(asignaturaId)) {
+            Set<EstadoInscripcionCurso> estadosValidos = correlatividad.getTipo() == Correlatividad.Tipo.REGULAR
+                    ? Set.of(EstadoInscripcionCurso.REGULAR, EstadoInscripcionCurso.APROBADO)
+                    : Set.of(EstadoInscripcionCurso.APROBADO);
+            if (!inscripciones.existsByAlumnoIdAndCursoAsignaturaIdAndEstadoIn(alumnoId,
+                    correlatividad.getCorrelativa().getId(), estadosValidos)) {
+                throw new ReglaNegocioException("No se cumple la correlatividad " + correlatividad.getTipo()
+                        + " requerida para la asignatura");
+            }
+        }
+    }
     private CursoRespuestaDto respuesta(Curso c) {
         return new CursoRespuestaDto(c.getId(), c.getCodigo(), c.getAsignatura().getId(), c.getPeriodo().getId(),
                 c.getSede().getId(), c.getModalidad(), c.getEstado(), c.getCupoMaximo(), c.getFechaInicio(),
                 c.getFechaFin(), inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA));
+    }
+    private CursoAcademicoRespuestaDto respuestaAcademica(Curso c) {
+        AsignaturaResumenDto asignatura = new AsignaturaResumenDto(c.getAsignatura().getId(),
+                c.getAsignatura().getCodigo(), c.getAsignatura().getNombre());
+        PeriodoAcademico p = c.getPeriodo();
+        PeriodoResumenDto periodo = new PeriodoResumenDto(p.getId(), p.getAnio(), p.getNumero(),
+                p.getFechaInicio(), p.getFechaFin(), p.getInscripcionDesde(), p.getInscripcionHasta());
+        return new CursoAcademicoRespuestaDto(c.getId(), c.getCodigo(), asignatura, periodo,
+                c.getSede().getId(), c.getModalidad(), c.getEstado(), c.getCupoMaximo(),
+                c.getFechaInicio(), c.getFechaFin(),
+                inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA));
     }
     private CursoDocenteRespuestaDto respuesta(CursoDocente cd) {
         return new CursoDocenteRespuestaDto(cd.getId(), cd.getDocenteId(), cd.getRol());

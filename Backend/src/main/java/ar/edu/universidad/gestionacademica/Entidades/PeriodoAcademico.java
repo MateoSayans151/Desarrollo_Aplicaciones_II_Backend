@@ -20,4 +20,8 @@ public class PeriodoAcademico {
     private LocalDate fechaInicio;
     @NotNull @Column(nullable = false)
     private LocalDate fechaFin;
+    @NotNull @Column(nullable = false)
+    private LocalDate inscripcionDesde;
+    @NotNull @Column(nullable = false)
+    private LocalDate inscripcionHasta;
 }

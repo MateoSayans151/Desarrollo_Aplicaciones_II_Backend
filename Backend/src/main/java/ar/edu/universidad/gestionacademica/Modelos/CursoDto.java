@@ -42,7 +42,16 @@ public final class CursoDto {
     public record HorarioCursoRespuestaDto(Long id, Long aulaId, DayOfWeek diaSemana,
                                            LocalTime horaInicio, LocalTime horaFin) { }
 
-    public record CursoDetalleRespuestaDto(CursoRespuestaDto curso, List<CursoDocenteRespuestaDto> docentes,
-                                           List<InscripcionCursoRespuestaDto> inscripciones,
-                                           List<HorarioCursoRespuestaDto> horarios) { }
+    public record AsignaturaResumenDto(Long id, String codigo, String nombre) { }
+    public record PeriodoResumenDto(Long id, int anio, int numero, LocalDate fechaInicio,
+                                    LocalDate fechaFin, LocalDate inscripcionDesde,
+                                    LocalDate inscripcionHasta) { }
+    public record CursoAcademicoRespuestaDto(Long id, String codigo, AsignaturaResumenDto asignatura,
+                                             PeriodoResumenDto periodo, Long sedeId, ModalidadCurso modalidad,
+                                             EstadoCurso estado, int cupoMaximo, LocalDate fechaInicio,
+                                             LocalDate fechaFin, long inscriptosActivos) { }
+    public record CursoDetalleAcademicoRespuestaDto(CursoAcademicoRespuestaDto curso,
+                                                    List<CursoDocenteRespuestaDto> docentes,
+                                                    List<InscripcionCursoRespuestaDto> inscripciones,
+                                                    List<HorarioCursoRespuestaDto> horarios) { }
 }

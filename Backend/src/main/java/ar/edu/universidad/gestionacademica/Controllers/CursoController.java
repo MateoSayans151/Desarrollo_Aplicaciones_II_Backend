@@ -23,7 +23,7 @@ public class CursoController {
     public List<CursoRespuestaDto> listar(@RequestParam(required = false) Long periodoId) { return servicio.listar(periodoId); }
 
     @GetMapping("/{cursoId}")
-    public CursoDetalleRespuestaDto detalle(@PathVariable Long cursoId) { return servicio.detalle(cursoId); }
+    public CursoDetalleAcademicoRespuestaDto detalle(@PathVariable Long cursoId) { return servicio.detalle(cursoId); }
 
     @PutMapping("/{cursoId}/estado")
     public CursoRespuestaDto actualizarEstado(@PathVariable Long cursoId,

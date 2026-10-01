@@ -25,15 +25,17 @@ public class PlanificacionServicio {
 
     public SedeRespuestaDto crearSede(CrearSedeDto dto) {
         Sede s = sedes.save(Sede.builder().nombre(dto.nombre()).direccion(dto.direccion()).build());
-        return new SedeRespuestaDto(s.getId(), s.getNombre(), s.getDireccion());
+        return sede(s);
     }
     @Transactional(readOnly = true)
     public List<SedeRespuestaDto> listarSedes() {
-        return sedes.findAll().stream().map(s -> new SedeRespuestaDto(s.getId(), s.getNombre(), s.getDireccion())).toList();
+        return sedes.findAll().stream().map(this::sede).toList();
     }
     public AulaRespuestaDto crearAula(Long sedeId, CrearAulaDto dto) {
         Sede sede = sedes.findById(sedeId).orElseThrow(() -> new RecursoNoEncontradoException("Sede no encontrada"));
-        Aula a = aulas.save(Aula.builder().codigo(dto.codigo()).capacidadMaxima(dto.capacidadMaxima()).sede(sede).build());
+        Aula a = aulas.save(Aula.builder().codigo(dto.codigo()).nombre(dto.codigo())
+                .capacidadMaxima(dto.capacidadMaxima())
+                .tipo(TipoUbicacion.AULA).sede(sede).build());
         return aula(a);
     }
     @Transactional(readOnly = true)
@@ -43,6 +45,9 @@ public class PlanificacionServicio {
     public AsignacionRespuestaDto asignarAula(CrearAsignacionDto dto) {
         if (!dto.horaFin().isAfter(dto.horaInicio())) throw new ReglaNegocioException("La hora de fin debe ser posterior a la de inicio");
         Aula aula = aulas.findById(dto.aulaId()).orElseThrow(() -> new RecursoNoEncontradoException("Aula no encontrada"));
+        if (aula.getTipo() != TipoUbicacion.AULA) {
+            throw new ReglaNegocioException("Solo se pueden asignar ubicaciones de tipo AULA a una asignatura");
+        }
         Asignatura asignatura = asignaturas.findById(dto.asignaturaId()).orElseThrow(() -> new RecursoNoEncontradoException("Asignatura no encontrada"));
         if (dto.cantidadEstudiantes() > aula.getCapacidadMaxima()) throw new ReglaNegocioException("La cantidad de estudiantes supera la capacidad del aula");
         if (asignaciones.existsByAulaIdAndFechaAndHoraInicioLessThanAndHoraFinGreaterThan(dto.aulaId(), dto.fecha(), dto.horaFin(), dto.horaInicio())) {
@@ -59,13 +64,18 @@ public class PlanificacionServicio {
     }
     public PeriodoRespuestaDto crearPeriodo(CrearPeriodoDto dto) {
         validarRango(dto.fechaInicio(), dto.fechaFin(), "cuatrimestre");
+        validarRango(dto.inscripcionDesde(), dto.inscripcionHasta(), "inscripcion");
+        if (dto.inscripcionHasta().isAfter(dto.fechaInicio())) {
+            throw new ReglaNegocioException("La inscripcion debe cerrar antes o el mismo dia del inicio del cuatrimestre");
+        }
         PeriodoAcademico p = periodos.save(PeriodoAcademico.builder().anio(dto.anio()).numero(dto.numero())
-                .fechaInicio(dto.fechaInicio()).fechaFin(dto.fechaFin()).build());
-        return new PeriodoRespuestaDto(p.getId(), p.getAnio(), p.getNumero(), p.getFechaInicio(), p.getFechaFin());
+                .fechaInicio(dto.fechaInicio()).fechaFin(dto.fechaFin())
+                .inscripcionDesde(dto.inscripcionDesde()).inscripcionHasta(dto.inscripcionHasta()).build());
+        return periodo(p);
     }
     @Transactional(readOnly = true)
     public List<PeriodoRespuestaDto> listarPeriodos() {
-        return periodos.findAll().stream().map(p -> new PeriodoRespuestaDto(p.getId(), p.getAnio(), p.getNumero(), p.getFechaInicio(), p.getFechaFin())).toList();
+        return periodos.findAll().stream().map(this::periodo).toList();
     }
     public TurnoRespuestaDto crearTurno(CrearTurnoDto dto) {
         validarRango(dto.fechaInicio(), dto.fechaFin(), "turno de examen");
@@ -81,7 +91,14 @@ public class PlanificacionServicio {
     private void validarRango(LocalDate inicio, LocalDate fin, String nombre) {
         if (!fin.isAfter(inicio)) throw new ReglaNegocioException("El fin de " + nombre + " debe ser posterior al inicio");
     }
-    private AulaRespuestaDto aula(Aula a) { return new AulaRespuestaDto(a.getId(), a.getCodigo(), a.getCapacidadMaxima(), a.getSede().getId()); }
+    private SedeRespuestaDto sede(Sede s) {
+        return new SedeRespuestaDto(s.getId(), s.getNombre(), s.getDireccion(), s.getBackofficeSiteId(), s.getEstado());
+    }
+    private AulaRespuestaDto aula(Aula a) {
+        return new AulaRespuestaDto(a.getId(), a.getCodigo(), a.getNombre(), a.getBackofficeLocationId(), a.getTipo(),
+                a.getCapacidadMaxima(), a.getSede().getId(), a.getEstado());
+    }
     private AsignacionRespuestaDto asignacion(AsignacionAula a) { return new AsignacionRespuestaDto(a.getId(), a.getAula().getId(), a.getAsignatura().getId(), a.getFecha(), a.getHoraInicio(), a.getHoraFin(), a.getCantidadEstudiantes()); }
+    private PeriodoRespuestaDto periodo(PeriodoAcademico p) { return new PeriodoRespuestaDto(p.getId(), p.getAnio(), p.getNumero(), p.getFechaInicio(), p.getFechaFin(), p.getInscripcionDesde(), p.getInscripcionHasta()); }
     private TurnoRespuestaDto turno(TurnoExamen t) { return new TurnoRespuestaDto(t.getId(), t.getNombre(), t.getFechaInicio(), t.getFechaFin(), t.getInscripcionDesde(), t.getInscripcionHasta()); }
 }
