@@ -4,7 +4,20 @@
 
 Este documento describe los endpoints y modelos que existen actualmente en Gestión Académica y que pueden servir de referencia a los módulos de Alumnos y Docencia.
 
-Las rutas siguientes son las que implementa directamente este servicio. El gateway institucional puede publicar un prefijo distinto. Actualmente los endpoints administrativos requieren autenticación y permiso administrativo; todavía no existen endpoints de autoservicio con permisos de alumno o docente.
+Las rutas siguientes son las que implementa directamente este servicio. El gateway institucional puede publicar un prefijo distinto.
+
+El Portal de Docencia consume estas rutas con `ROLE_ADMINISTRATIVO` (o `ROLE_ACADEMIC_ADMIN`) y puede luego presentar la información al alumno. No se exponen endpoints públicos ni de autoservicio directamente desde este servicio.
+
+## Situación de los requerimientos del Portal de Docencia
+
+| Requerimiento | Estado actual | Uso o extensión recomendada |
+| --- | --- | --- |
+| Mostrar las materias/cursos de un alumno | No existe una consulta por alumno. El detalle de un curso incluye sus inscripciones, pero no debe usarse para componer esta vista. | Incorporar `GET /api/planificacion/alumnos/{alumnoId}/inscripciones?periodoId={id}`. Debe devolver cada inscripción junto con el curso y la asignatura. |
+| Mostrar correlatividades | Implementado. | Usar `GET /api/academica/asignaturas/{asignaturaId}/correlatividades`. La regla también se valida al inscribir al alumno. |
+| Determinar si una asignatura pertenece a un plan/carrera | No existe una consulta puntual. | Obtener los planes de la carrera y luego las asignaturas del plan; o incorporar un filtro `planId` al listado de cursos para evitar el filtrado del lado del Portal. |
+| Mostrar el nombre de la asignatura en el listado de cursos | El listado devuelve solamente `asignaturaId`. El detalle de un curso ya trae el nombre. | Ampliar la respuesta de `GET /api/planificacion/cursos` con `asignatura: { id, codigo, nombre }`; es preferible a hacer un detalle por cada curso. |
+
+Las extensiones indicadas en esta tabla son propuestas y **no están implementadas actualmente**.
 
 ## Cursos
 
@@ -31,6 +44,8 @@ El filtro `periodoId` es opcional. La respuesta es una lista con el DTO actual:
   }
 ]
 ```
+
+Actualmente no admite `planId` y tampoco incluye el nombre de la asignatura. Para obtener cursos de un plan con el contrato actual, el Portal debe obtener las asignaturas de ese plan y filtrar por `asignaturaId`.
 
 ### Consultar detalle de curso
 
@@ -152,6 +167,8 @@ Respuesta:
 
 Los valores admitidos para `estado` son `INSCRIPTO`, `CURSANDO`, `BAJA`, `REGULAR`, `LIBRE`, `APROBADO` y `DESAPROBADO`. `notaFinal` puede ser nula o estar entre 0 y 10.
 
+No existe actualmente un `GET` que liste las inscripciones de un `alumnoId`. El Portal no debe consultar el detalle de todos los cursos para reconstruir esa información.
+
 ## Correlatividades
 
 ### Consultar correlatividades de una asignatura
@@ -177,7 +194,7 @@ Devuelve las asignaturas que deben estar regularizadas o aprobadas para cursar l
 ]
 ```
 
-`APROBADA` requiere que la asignatura correlativa esté aprobada. `REGULAR` admite que esté regular o aprobada. El endpoint ya está implementado, pero actualmente su lectura requiere `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN`; para consumirlo con credenciales del módulo de Alumnos hay que autorizar el rol correspondiente en Seguridad.
+`APROBADA` requiere que la asignatura correlativa esté aprobada. `REGULAR` admite que esté regular o aprobada. El endpoint requiere `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN`, por lo que el Portal de Docencia puede consumirlo con sus credenciales actuales. La misma validación se ejecuta al crear una inscripción.
 
 ## Calendario: turnos de examen
 
@@ -220,20 +237,33 @@ La respuesta actual contiene `nombre` (no `titulo`) y las fechas del turno y de 
 
 ## Evento de notificación de resultado
 
-Existe el DTO `EventoNotificacionDto` como formato de integración para una futura notificación al publicarse un resultado. El servicio todavía no emite el evento; no hay actualmente un endpoint, broker, WebSocket o SSE para entregarlo.
+Al publicar un resultado final (`APROBADO` o `DESAPROBADO` con `fechaResultado`), el servicio construye este evento. Si `ANALYTICS_QUEUE_ENABLED=true`, lo publica como JSON en RabbitMQ después de confirmar la transacción. Los reintentos del mismo alumno y curso conservan `eventId` para que Analítica pueda deduplicarlos.
 
 ```json
 {
-  "tipo": "academica.resultado.publicado",
-  "ocurridoEn": "2026-09-30T14:30:00Z",
-  "alumnoId": "alumno-456",
-  "cursoId": 42,
-  "notaFinal": 8.0,
-  "estado": "APROBADO",
-  "fechaResultado": "2026-09-30",
-  "enlace": "/alumnos/cursos/42"
+  "eventId": "acad-res-alumno-456-curso-42",
+  "sourceModule": "academica",
+  "eventType": "resultado.publicado",
+  "occurredAt": "2026-09-30T14:30:00Z",
+  "payload": {
+    "alumnoId": "alumno-456",
+    "cursoId": 42,
+    "materia": "BDD-310",
+    "comision": "B1",
+    "docente": "docente-12",
+    "sede": "Sede Montserrat",
+    "cuatrimestre": "2026-2Q",
+    "notaFinal": 8.0,
+    "estado": "APROBADO",
+    "aprobado": true,
+    "fechaResultado": "2026-09-30"
+  }
 }
 ```
+
+El exchange, cola y routing key se configuran con `ANALYTICS_QUEUE_EXCHANGE`,
+`ANALYTICS_QUEUE_NAME` y `ANALYTICS_QUEUE_ROUTING_KEY`, respectivamente. Por defecto:
+`academica.eventos`, `analitica.resultados` y `resultado.publicado`.
 
 ## Entidades y referencias para desarrollo local
 

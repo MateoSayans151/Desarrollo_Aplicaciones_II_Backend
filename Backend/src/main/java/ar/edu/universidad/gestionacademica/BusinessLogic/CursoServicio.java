@@ -2,12 +2,17 @@ package ar.edu.universidad.gestionacademica.BusinessLogic;
 
 import ar.edu.universidad.gestionacademica.Entidades.*;
 import ar.edu.universidad.gestionacademica.Excepciones.*;
+import ar.edu.universidad.gestionacademica.Integracion.Analitica.EventoResultadoPublicado;
+import ar.edu.universidad.gestionacademica.Modelos.EventoNotificacionDto;
 import ar.edu.universidad.gestionacademica.Repositorios.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -26,6 +31,7 @@ public class CursoServicio {
     private final InscripcionCursoRepositorio inscripciones;
     private final HorarioCursoRepositorio horarios;
     private final CorrelatividadRepositorio correlatividades;
+    private final ApplicationEventPublisher eventos;
 
     public CursoRespuestaDto crear(CrearCursoDto dto) {
         PeriodoAcademico periodo = periodos.findById(dto.periodoId())
@@ -91,9 +97,13 @@ public class CursoServicio {
                                                                 ActualizarInscripcionCursoDto dto) {
         InscripcionCurso inscripcion = inscripciones.findByCursoIdAndAlumnoId(cursoId, alumnoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Inscripción no encontrada"));
+        validarResultadoFinal(dto);
         inscripcion.setEstado(dto.estado());
         inscripcion.setNotaFinal(dto.notaFinal());
         inscripcion.setFechaResultado(dto.fechaResultado());
+        if (esResultadoPublicado(inscripcion)) {
+            eventos.publishEvent(new EventoResultadoPublicado(eventoResultado(inscripcion)));
+        }
         return respuesta(inscripcion);
     }
 
@@ -129,6 +139,40 @@ public class CursoServicio {
     }
     private Sede buscarSede(Long id) {
         return sedes.findById(id).orElseThrow(() -> new RecursoNoEncontradoException("Sede no encontrada"));
+    }
+    private boolean esResultadoPublicado(InscripcionCurso inscripcion) {
+        return inscripcion.getEstado() == EstadoInscripcionCurso.APROBADO
+                || inscripcion.getEstado() == EstadoInscripcionCurso.DESAPROBADO;
+    }
+    private void validarResultadoFinal(ActualizarInscripcionCursoDto dto) {
+        boolean estadoFinal = dto.estado() == EstadoInscripcionCurso.APROBADO
+                || dto.estado() == EstadoInscripcionCurso.DESAPROBADO;
+        if (estadoFinal && (dto.notaFinal() == null || dto.fechaResultado() == null)) {
+            throw new ReglaNegocioException("Un resultado final requiere nota final y fecha de resultado");
+        }
+    }
+    private EventoNotificacionDto eventoResultado(InscripcionCurso inscripcion) {
+        Curso curso = inscripcion.getCurso();
+        PeriodoAcademico periodo = curso.getPeriodo();
+        String docente = cursoDocentes.findByCursoIdOrderById(curso.getId()).stream()
+                .min(Comparator.comparingInt(asignacion -> prioridadDocente(asignacion.getRol())))
+                .map(CursoDocente::getDocenteId)
+                .orElse(null);
+        EventoNotificacionDto.Payload payload = new EventoNotificacionDto.Payload(
+                inscripcion.getAlumnoId(), curso.getId(), curso.getAsignatura().getCodigo(), curso.getCodigo(),
+                docente, curso.getSede().getNombre(), periodo.getAnio() + "-" + periodo.getNumero() + "Q",
+                inscripcion.getNotaFinal(), inscripcion.getEstado(),
+                inscripcion.getEstado() == EstadoInscripcionCurso.APROBADO, inscripcion.getFechaResultado());
+        return new EventoNotificacionDto(
+                "acad-res-" + inscripcion.getAlumnoId() + "-curso-" + curso.getId(),
+                "academica", "resultado.publicado", Instant.now(), payload);
+    }
+    private int prioridadDocente(RolDocenteCurso rol) {
+        return switch (rol) {
+            case TITULAR -> 0;
+            case ADJUNTO -> 1;
+            case AUXILIAR -> 2;
+        };
     }
     private void validarFechas(LocalDate inicio, LocalDate fin, PeriodoAcademico periodo) {
         if (!fin.isAfter(inicio)) throw new ReglaNegocioException("La fecha de fin debe ser posterior a la fecha de inicio");
