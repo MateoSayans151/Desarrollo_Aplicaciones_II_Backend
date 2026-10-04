@@ -24,7 +24,7 @@ public class PlanEstudio {
     private int cantidadAsignaturas;
     @Enumerated(EnumType.STRING) @Column(nullable = false)
     @Builder.Default
-    private EstadoAcademico estado = EstadoAcademico.BORRADOR;
+    private EstadoAcademico estado = EstadoAcademico.ACTIVA;
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "carrera_id", nullable = false)
     private Carrera carrera;

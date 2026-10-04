@@ -33,6 +33,11 @@ Las columnas para vincular sedes y aulas con Backoffice ya están en el esquema
 de volúmenes nuevos. Para una base existente, aplicar manualmente
 `docker/migrations/02-backoffice-sites-and-locations.sql`.
 
+El campo `asignaturas.anio` ahora es numerico, en concordancia con la entidad
+`Asignatura`. Para una base existente, aplicar manualmente
+`docker/migrations/03-asignatura-anio-integer.sql`. La migracion requiere que
+los valores almacenados sean niveles numericos.
+
 ### Cambios de esquema
 
 El período académico ahora incluye `inscripcionDesde` e `inscripcionHasta`.
