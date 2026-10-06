@@ -22,9 +22,9 @@ public final class EstructuraAcademicaDto {
                                    int cantidadAsignaturas, EstadoAcademico estado, Long carreraId) { }
 
     public record CrearAsignaturaDto(@NotBlank String codigo, @NotBlank String nombre,
-                                     @NotBlank String anio, @Positive int creditos,
+                                     @Min(1) int anio, @Positive int creditos,
                                      @Positive int cargaHoraria) { }
-    public record AsignaturaRespuestaDto(Long id, String codigo, String nombre, String anio,
+    public record AsignaturaRespuestaDto(Long id, String codigo, String nombre, int anio,
                                          int creditos, int cargaHoraria, EstadoAcademico estado,
                                          Long planId) { }
 

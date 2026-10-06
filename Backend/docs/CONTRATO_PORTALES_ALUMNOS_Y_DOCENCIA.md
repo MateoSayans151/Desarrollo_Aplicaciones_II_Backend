@@ -273,7 +273,7 @@ Los módulos pueden copiar estos modelos mínimos para desarrollar con datos loc
 | --- | --- |
 | `Curso` | `id: Long`, `codigo: String`, `asignaturaId: Long`, `periodoId: Long`, `sedeId: Long`, `modalidad: ModalidadCurso`, `estado: EstadoCurso`, `cupoMaximo: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate` |
 | `InscripcionCurso` | `id: Long`, `cursoId: Long`, `alumnoId: String`, `fechaInscripcion: LocalDate`, `estado: EstadoInscripcionCurso`, `notaFinal: BigDecimal?`, `fechaResultado: LocalDate?` |
-| `Asignatura` | `id: Long`, `codigo: String`, `nombre: String`, `anio: String`, `creditos: int`, `cargaHoraria: int`, `estado: EstadoAcademico`, `planId: Long` |
+| `Asignatura` | `id: Long`, `codigo: String`, `nombre: String`, `anio: int`, `creditos: int`, `cargaHoraria: int`, `estado: EstadoAcademico`, `planId: Long` |
 | `Correlatividad` | `id: Long`, `asignaturaId: Long`, `correlativaId: Long`, `tipo: Correlatividad.Tipo` |
 | `PeriodoAcademico` | `id: Long`, `anio: int`, `numero: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `inscripcionDesde: LocalDate`, `inscripcionHasta: LocalDate` |
 | `TurnoExamen` | `id: Long`, `nombre: String`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `inscripcionDesde: LocalDate`, `inscripcionHasta: LocalDate` |

@@ -14,7 +14,7 @@ public class Asignatura {
     private String codigo;
     @NotBlank @Column(nullable = false)
     private String nombre;
-    @NotBlank @Column(nullable = false)
+    @Min(1) @Column(nullable = false)
     private int anio;
     @Positive @Column(nullable = false)
     private int creditos;
