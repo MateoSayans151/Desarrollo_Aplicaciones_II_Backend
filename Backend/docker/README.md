@@ -38,6 +38,11 @@ El campo `asignaturas.anio` ahora es numerico, en concordancia con la entidad
 `docker/migrations/03-asignatura-anio-integer.sql`. La migracion requiere que
 los valores almacenados sean niveles numericos.
 
+Para una base existente, aplicar `docker/migrations/04-curso-turno-y-horas.sql`
+antes de iniciar el backend actualizado. Agrega `turno`, `hora_inicio` y
+`hora_fin` a `cursos`. Los cursos existentes quedan con valores nulos hasta
+que se conozcan sus horarios; la API exige los tres campos al crear cursos nuevos.
+
 ### Cambios de esquema
 
 El período académico ahora incluye `inscripcionDesde` e `inscripcionHasta`.

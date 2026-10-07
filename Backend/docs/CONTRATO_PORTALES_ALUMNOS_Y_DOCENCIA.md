@@ -36,6 +36,9 @@ El filtro `periodoId` es opcional. La respuesta es una lista con el DTO actual:
     "periodoId": 8,
     "sedeId": 2,
     "modalidad": "PRESENCIAL",
+    "turno": "TARDE",
+    "horaInicio": "14:00:00",
+    "horaFin": "18:00:00",
     "estado": "EN_CURSO",
     "cupoMaximo": 45,
     "fechaInicio": "2026-08-10",
@@ -74,6 +77,9 @@ El curso incluye ahora los datos básicos de asignatura y período de forma anid
     },
     "sedeId": 2,
     "modalidad": "PRESENCIAL",
+    "turno": "TARDE",
+    "horaInicio": "14:00:00",
+    "horaFin": "18:00:00",
     "estado": "EN_CURSO",
     "cupoMaximo": 45,
     "fechaInicio": "2026-08-10",
@@ -118,6 +124,9 @@ El DTO de detalle refleja los datos que devuelve el endpoint. Los identificadore
   "periodoId": 8,
   "sedeId": 2,
   "modalidad": "PRESENCIAL",
+  "turno": "TARDE",
+  "horaInicio": "14:00",
+  "horaFin": "18:00",
   "cupoMaximo": 45,
   "fechaInicio": "2026-08-10",
   "fechaFin": "2026-11-30"
@@ -271,7 +280,7 @@ Los módulos pueden copiar estos modelos mínimos para desarrollar con datos loc
 
 | Entidad | Campos del modelo actual relevantes para integración |
 | --- | --- |
-| `Curso` | `id: Long`, `codigo: String`, `asignaturaId: Long`, `periodoId: Long`, `sedeId: Long`, `modalidad: ModalidadCurso`, `estado: EstadoCurso`, `cupoMaximo: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate` |
+| `Curso` | `id: Long`, `codigo: String`, `asignaturaId: Long`, `periodoId: Long`, `sedeId: Long`, `modalidad: ModalidadCurso`, `estado: EstadoCurso`, `cupoMaximo: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `turno: TurnoCurso`, `horaInicio: LocalTime`, `horaFin: LocalTime` |
 | `InscripcionCurso` | `id: Long`, `cursoId: Long`, `alumnoId: String`, `fechaInscripcion: LocalDate`, `estado: EstadoInscripcionCurso`, `notaFinal: BigDecimal?`, `fechaResultado: LocalDate?` |
 | `Asignatura` | `id: Long`, `codigo: String`, `nombre: String`, `anio: int`, `creditos: int`, `cargaHoraria: int`, `estado: EstadoAcademico`, `planId: Long` |
 | `Correlatividad` | `id: Long`, `asignaturaId: Long`, `correlativaId: Long`, `tipo: Correlatividad.Tipo` |
@@ -285,6 +294,7 @@ Los módulos pueden copiar estos modelos mínimos para desarrollar con datos loc
 Enumeraciones usadas por estos modelos:
 
 - `EstadoCurso`: `PLANIFICADO`, `EN_CURSO`, `FINALIZADO`, `CANCELADO`.
+- `TurnoCurso`: `TARDE`, `MAÑANA`, `NOCHE`. En `POST /api/planificacion/cursos`, los tres campos son obligatorios y `horaFin` debe ser posterior a `horaInicio`. Los cursos anteriores a esta ampliación pueden devolver `null` en esos campos hasta completar sus datos.
 - `EstadoInscripcionCurso`: `INSCRIPTO`, `CURSANDO`, `BAJA`, `REGULAR`, `LIBRE`, `APROBADO`, `DESAPROBADO`.
 - `RolDocenteCurso`: `TITULAR`, `ADJUNTO`, `AUXILIAR`.
 - `Correlatividad.Tipo`: `REGULAR`, `APROBADA`.

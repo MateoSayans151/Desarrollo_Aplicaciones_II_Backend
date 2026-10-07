@@ -5,6 +5,7 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 @Entity
 @Table(name = "cursos", uniqueConstraints = @UniqueConstraint(columnNames = {"periodo_id", "codigo"}))
@@ -43,4 +44,11 @@ public class Curso {
 
     @NotNull @Column(nullable = false)
     private LocalDate fechaFin;
+
+    @Enumerated(EnumType.STRING) @Column(length = 20)
+    private TurnoCurso turno;
+
+    private LocalTime horaInicio;
+
+    private LocalTime horaFin;
 }

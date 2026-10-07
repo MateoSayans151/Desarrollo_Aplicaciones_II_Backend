@@ -37,10 +37,14 @@ public class CursoServicio {
         PeriodoAcademico periodo = periodos.findById(dto.periodoId())
                 .orElseThrow(() -> new RecursoNoEncontradoException("Periodo académico no encontrado"));
         validarFechas(dto.fechaInicio(), dto.fechaFin(), periodo);
+        if (!dto.horaFin().isAfter(dto.horaInicio())) {
+            throw new ReglaNegocioException("La hora de fin del curso debe ser posterior a la de inicio");
+        }
         Curso curso = cursos.save(Curso.builder()
                 .codigo(dto.codigo().trim()).asignatura(buscarAsignatura(dto.asignaturaId())).periodo(periodo)
                 .sede(buscarSede(dto.sedeId())).modalidad(dto.modalidad()).cupoMaximo(dto.cupoMaximo())
-                .fechaInicio(dto.fechaInicio()).fechaFin(dto.fechaFin()).build());
+                .fechaInicio(dto.fechaInicio()).fechaFin(dto.fechaFin())
+                .turno(dto.turno()).horaInicio(dto.horaInicio()).horaFin(dto.horaFin()).build());
         return respuesta(curso);
     }
 
@@ -201,7 +205,8 @@ public class CursoServicio {
     private CursoRespuestaDto respuesta(Curso c) {
         return new CursoRespuestaDto(c.getId(), c.getCodigo(), c.getAsignatura().getId(), c.getPeriodo().getId(),
                 c.getSede().getId(), c.getModalidad(), c.getEstado(), c.getCupoMaximo(), c.getFechaInicio(),
-                c.getFechaFin(), inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA));
+                c.getFechaFin(), c.getTurno(), c.getHoraInicio(), c.getHoraFin(),
+                inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA));
     }
     private CursoAcademicoRespuestaDto respuestaAcademica(Curso c) {
         AsignaturaResumenDto asignatura = new AsignaturaResumenDto(c.getAsignatura().getId(),
@@ -211,7 +216,7 @@ public class CursoServicio {
                 p.getFechaInicio(), p.getFechaFin(), p.getInscripcionDesde(), p.getInscripcionHasta());
         return new CursoAcademicoRespuestaDto(c.getId(), c.getCodigo(), asignatura, periodo,
                 c.getSede().getId(), c.getModalidad(), c.getEstado(), c.getCupoMaximo(),
-                c.getFechaInicio(), c.getFechaFin(),
+                c.getFechaInicio(), c.getFechaFin(), c.getTurno(), c.getHoraInicio(), c.getHoraFin(),
                 inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA));
     }
     private CursoDocenteRespuestaDto respuesta(CursoDocente cd) {

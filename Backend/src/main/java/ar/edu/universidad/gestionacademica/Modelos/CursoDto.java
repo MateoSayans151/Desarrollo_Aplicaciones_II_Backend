@@ -18,11 +18,15 @@ public final class CursoDto {
             @NotNull ModalidadCurso modalidad,
             @Positive int cupoMaximo,
             @NotNull LocalDate fechaInicio,
-            @NotNull LocalDate fechaFin) { }
+            @NotNull LocalDate fechaFin,
+            @NotNull TurnoCurso turno,
+            @NotNull LocalTime horaInicio,
+            @NotNull LocalTime horaFin) { }
 
     public record CursoRespuestaDto(Long id, String codigo, Long asignaturaId, Long periodoId, Long sedeId,
                                     ModalidadCurso modalidad, EstadoCurso estado, int cupoMaximo,
-                                    LocalDate fechaInicio, LocalDate fechaFin, long inscriptosActivos) { }
+                                    LocalDate fechaInicio, LocalDate fechaFin, TurnoCurso turno,
+                                    LocalTime horaInicio, LocalTime horaFin, long inscriptosActivos) { }
 
     public record ActualizarEstadoCursoDto(@NotNull EstadoCurso estado) { }
 
@@ -49,7 +53,8 @@ public final class CursoDto {
     public record CursoAcademicoRespuestaDto(Long id, String codigo, AsignaturaResumenDto asignatura,
                                              PeriodoResumenDto periodo, Long sedeId, ModalidadCurso modalidad,
                                              EstadoCurso estado, int cupoMaximo, LocalDate fechaInicio,
-                                             LocalDate fechaFin, long inscriptosActivos) { }
+                                             LocalDate fechaFin, TurnoCurso turno, LocalTime horaInicio,
+                                             LocalTime horaFin, long inscriptosActivos) { }
     public record CursoDetalleAcademicoRespuestaDto(CursoAcademicoRespuestaDto curso,
                                                     List<CursoDocenteRespuestaDto> docentes,
                                                     List<InscripcionCursoRespuestaDto> inscripciones,

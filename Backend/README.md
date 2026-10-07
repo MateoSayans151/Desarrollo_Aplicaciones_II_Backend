@@ -114,8 +114,8 @@ para testear la API:
 | POST | `/api/planificacion/asignaciones` | Asignar un aula |
 | GET | `/api/planificacion/aulas/{id}/agenda?fecha=AAAA-MM-DD` | Consultar agenda |
 | POST / GET | `/api/planificacion/periodos` | Crear/listar cuatrimestres |
-| POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=` |
-| GET | `/api/planificacion/cursos/{id}` | Consultar curso, docentes, inscripciones y horarios |
+| POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Al crear requiere `turno` (`TARDE`, `MAÑANA`, `NOCHE`), `horaInicio` y `horaFin` (`HH:mm`); se devuelven al listar. |
+| GET | `/api/planificacion/cursos/{id}` | Consultar curso (incluidos turno y horas), docentes, inscripciones y horarios |
 | PUT | `/api/planificacion/cursos/{id}/estado` | Actualizar estado del curso |
 | POST | `/api/planificacion/cursos/{id}/docentes` | Asignar docente externo al curso |
 | POST / PUT | `/api/planificacion/cursos/{id}/inscripciones` | Inscribir alumno o actualizar su resultado |

@@ -105,6 +105,10 @@ CREATE TABLE cursos (
     cupo_maximo INTEGER NOT NULL,
     fecha_inicio DATE NOT NULL,
     fecha_fin DATE NOT NULL,
+    turno VARCHAR(20) NOT NULL CHECK (turno IN ('TARDE', 'MAÑANA', 'NOCHE')),
+    hora_inicio TIME NOT NULL,
+    hora_fin TIME NOT NULL,
+    CONSTRAINT ck_cursos_horas CHECK (hora_fin > hora_inicio),
     CONSTRAINT uk_curso_periodo_codigo UNIQUE (periodo_id, codigo)
 );
 

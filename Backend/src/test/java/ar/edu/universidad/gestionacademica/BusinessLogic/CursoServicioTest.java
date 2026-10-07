@@ -8,11 +8,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 class CursoServicioTest {
@@ -31,6 +33,33 @@ class CursoServicioTest {
             cursoDocentes, inscripciones, horarios, correlatividades, eventos);
 
     @Test
+    void crearCursoGuardaTurnoYHorasYRechazaUnRangoInvertido() {
+        PeriodoAcademico periodo = PeriodoAcademico.builder().id(8L)
+                .fechaInicio(LocalDate.of(2026, 8, 1)).fechaFin(LocalDate.of(2026, 11, 30)).build();
+        when(periodos.findById(8L)).thenReturn(Optional.of(periodo));
+        when(asignaturas.findById(15L)).thenReturn(Optional.of(Asignatura.builder().id(15L).build()));
+        when(sedes.findById(2L)).thenReturn(Optional.of(Sede.builder().id(2L).build()));
+        when(cursos.save(any(Curso.class))).thenAnswer(invocation -> {
+            Curso curso = invocation.getArgument(0);
+            curso.setId(42L);
+            return curso;
+        });
+        var dto = new CursoDto.CrearCursoDto("DDA2-A", 15L, 8L, 2L, ModalidadCurso.PRESENCIAL,
+                45, LocalDate.of(2026, 8, 10), LocalDate.of(2026, 11, 30),
+                TurnoCurso.TARDE, LocalTime.of(14, 0), LocalTime.of(18, 0));
+
+        var creado = servicio.crear(dto);
+
+        assertThat(creado.turno()).isEqualTo(TurnoCurso.TARDE);
+        assertThat(creado.horaInicio()).isEqualTo(LocalTime.of(14, 0));
+        assertThat(creado.horaFin()).isEqualTo(LocalTime.of(18, 0));
+        assertThatThrownBy(() -> servicio.crear(new CursoDto.CrearCursoDto("DDA2-B", 15L, 8L, 2L,
+                ModalidadCurso.PRESENCIAL, 45, LocalDate.of(2026, 8, 10), LocalDate.of(2026, 11, 30),
+                TurnoCurso.TARDE, LocalTime.of(18, 0), LocalTime.of(14, 0))))
+                .hasMessageContaining("hora de fin");
+    }
+
+    @Test
     void detalleDevuelveAsignaturaYPeriodoAnidados() {
         Asignatura asignatura = Asignatura.builder()
                 .id(15L).codigo("DDA2").nombre("Desarrollo de Aplicaciones II").build();
@@ -44,6 +73,7 @@ class CursoServicioTest {
                 .sede(Sede.builder().id(2L).build()).modalidad(ModalidadCurso.PRESENCIAL)
                 .estado(EstadoCurso.EN_CURSO).cupoMaximo(45)
                 .fechaInicio(LocalDate.of(2026, 8, 10)).fechaFin(LocalDate.of(2026, 11, 30))
+                .turno(TurnoCurso.TARDE).horaInicio(LocalTime.of(14, 0)).horaFin(LocalTime.of(18, 0))
                 .build();
 
         when(cursos.findById(42L)).thenReturn(Optional.of(curso));
@@ -62,6 +92,9 @@ class CursoServicioTest {
         assertThat(detalle.curso().periodo().numero()).isEqualTo(2);
         assertThat(detalle.curso().periodo().inscripcionDesde()).isEqualTo(LocalDate.of(2026, 7, 1));
         assertThat(detalle.curso().periodo().inscripcionHasta()).isEqualTo(LocalDate.of(2026, 7, 31));
+        assertThat(detalle.curso().turno()).isEqualTo(TurnoCurso.TARDE);
+        assertThat(detalle.curso().horaInicio()).isEqualTo(LocalTime.of(14, 0));
+        assertThat(detalle.curso().horaFin()).isEqualTo(LocalTime.of(18, 0));
     }
 
     @Test
