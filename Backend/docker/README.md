@@ -43,6 +43,11 @@ antes de iniciar el backend actualizado. Agrega `turno`, `hora_inicio` y
 `hora_fin` a `cursos`. Los cursos existentes quedan con valores nulos hasta
 que se conozcan sus horarios; la API exige los tres campos al crear cursos nuevos.
 
+Después de la migración 04, aplicar `docker/migrations/05-curso-dia-y-aula.sql`.
+Agrega `dia_semana` y `aula_id` a `cursos`, traslada el único horario existente
+de cada curso y elimina `horarios_curso`. Si algún curso tiene más de un horario,
+la migración se detiene sin modificar los datos.
+
 ### Cambios de esquema
 
 El período académico ahora incluye `inscripcionDesde` e `inscripcionHasta`.

@@ -9,6 +9,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.DayOfWeek;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -25,12 +26,11 @@ class CursoServicioTest {
     private final AulaRepositorio aulas = mock(AulaRepositorio.class);
     private final CursoDocenteRepositorio cursoDocentes = mock(CursoDocenteRepositorio.class);
     private final InscripcionCursoRepositorio inscripciones = mock(InscripcionCursoRepositorio.class);
-    private final HorarioCursoRepositorio horarios = mock(HorarioCursoRepositorio.class);
     private final CorrelatividadRepositorio correlatividades = mock(CorrelatividadRepositorio.class);
     private final ApplicationEventPublisher eventos = mock(ApplicationEventPublisher.class);
 
     private final CursoServicio servicio = new CursoServicio(cursos, asignaturas, periodos, sedes, aulas,
-            cursoDocentes, inscripciones, horarios, correlatividades, eventos);
+            cursoDocentes, inscripciones, correlatividades, eventos);
 
     @Test
     void crearCursoGuardaTurnoYHorasYRechazaUnRangoInvertido() {
@@ -39,6 +39,8 @@ class CursoServicioTest {
         when(periodos.findById(8L)).thenReturn(Optional.of(periodo));
         when(asignaturas.findById(15L)).thenReturn(Optional.of(Asignatura.builder().id(15L).build()));
         when(sedes.findById(2L)).thenReturn(Optional.of(Sede.builder().id(2L).build()));
+        when(aulas.findById(3L)).thenReturn(Optional.of(Aula.builder().id(3L)
+                .sede(Sede.builder().id(2L).build()).tipo(TipoUbicacion.AULA).capacidadMaxima(50).build()));
         when(cursos.save(any(Curso.class))).thenAnswer(invocation -> {
             Curso curso = invocation.getArgument(0);
             curso.setId(42L);
@@ -46,16 +48,18 @@ class CursoServicioTest {
         });
         var dto = new CursoDto.CrearCursoDto("DDA2-A", 15L, 8L, 2L, ModalidadCurso.PRESENCIAL,
                 45, LocalDate.of(2026, 8, 10), LocalDate.of(2026, 11, 30),
-                TurnoCurso.TARDE, LocalTime.of(14, 0), LocalTime.of(18, 0));
+                TurnoCurso.TARDE, LocalTime.of(14, 0), LocalTime.of(18, 0), DayOfWeek.MONDAY, 3L);
 
         var creado = servicio.crear(dto);
 
         assertThat(creado.turno()).isEqualTo(TurnoCurso.TARDE);
         assertThat(creado.horaInicio()).isEqualTo(LocalTime.of(14, 0));
         assertThat(creado.horaFin()).isEqualTo(LocalTime.of(18, 0));
+        assertThat(creado.diaSemana()).isEqualTo(DayOfWeek.MONDAY);
+        assertThat(creado.aulaId()).isEqualTo(3L);
         assertThatThrownBy(() -> servicio.crear(new CursoDto.CrearCursoDto("DDA2-B", 15L, 8L, 2L,
                 ModalidadCurso.PRESENCIAL, 45, LocalDate.of(2026, 8, 10), LocalDate.of(2026, 11, 30),
-                TurnoCurso.TARDE, LocalTime.of(18, 0), LocalTime.of(14, 0))))
+                TurnoCurso.TARDE, LocalTime.of(18, 0), LocalTime.of(14, 0), DayOfWeek.MONDAY, 3L)))
                 .hasMessageContaining("hora de fin");
     }
 
@@ -74,12 +78,12 @@ class CursoServicioTest {
                 .estado(EstadoCurso.EN_CURSO).cupoMaximo(45)
                 .fechaInicio(LocalDate.of(2026, 8, 10)).fechaFin(LocalDate.of(2026, 11, 30))
                 .turno(TurnoCurso.TARDE).horaInicio(LocalTime.of(14, 0)).horaFin(LocalTime.of(18, 0))
+                .diaSemana(DayOfWeek.MONDAY).aula(Aula.builder().id(3L).build())
                 .build();
 
         when(cursos.findById(42L)).thenReturn(Optional.of(curso));
         when(cursoDocentes.findByCursoIdOrderById(42L)).thenReturn(List.of());
         when(inscripciones.findByCursoIdOrderByAlumnoId(42L)).thenReturn(List.of());
-        when(horarios.findByCursoIdOrderByDiaSemanaAscHoraInicioAsc(42L)).thenReturn(List.of());
         when(inscripciones.countByCursoIdAndEstadoNot(42L, EstadoInscripcionCurso.BAJA)).thenReturn(0L);
 
         var detalle = servicio.detalle(42L);
@@ -95,6 +99,8 @@ class CursoServicioTest {
         assertThat(detalle.curso().turno()).isEqualTo(TurnoCurso.TARDE);
         assertThat(detalle.curso().horaInicio()).isEqualTo(LocalTime.of(14, 0));
         assertThat(detalle.curso().horaFin()).isEqualTo(LocalTime.of(18, 0));
+        assertThat(detalle.curso().diaSemana()).isEqualTo(DayOfWeek.MONDAY);
+        assertThat(detalle.curso().aulaId()).isEqualTo(3L);
     }
 
     @Test
@@ -124,6 +130,55 @@ class CursoServicioTest {
         assertThat(publicado.evento().payload().sede()).isEqualTo("Sede Montserrat");
         assertThat(publicado.evento().payload().cuatrimestre()).isEqualTo("2026-2Q");
         assertThat(publicado.evento().payload().aprobado()).isTrue();
+    }
+
+    @Test
+    void listaNotasDelCursoIncluyendoAlumnosSinNota() {
+        when(cursos.findById(42L)).thenReturn(Optional.of(Curso.builder().id(42L).build()));
+        when(inscripciones.findByCursoIdOrderByAlumnoId(42L)).thenReturn(List.of(
+                InscripcionCurso.builder().alumnoId("core-alumno-1").estado(EstadoInscripcionCurso.CURSANDO).build(),
+                InscripcionCurso.builder().alumnoId("core-alumno-2").estado(EstadoInscripcionCurso.APROBADO)
+                        .notaFinal(new BigDecimal("8.50")).fechaResultado(LocalDate.of(2026, 10, 12)).build()));
+
+        var notas = servicio.listarNotas(42L);
+
+        assertThat(notas).hasSize(2);
+        assertThat(notas.get(0).alumnoId()).isEqualTo("core-alumno-1");
+        assertThat(notas.get(0).notaFinal()).isNull();
+        assertThat(notas.get(1).notaFinal()).isEqualByComparingTo("8.50");
+    }
+
+    @Test
+    void cargaNotaFinalEnInscripcionExistenteYPublicaResultadoSoloCuandoCambia() {
+        Curso curso = Curso.builder().id(42L).codigo("DDA2-A")
+                .asignatura(Asignatura.builder().codigo("DDA2").build())
+                .periodo(PeriodoAcademico.builder().anio(2026).numero(2).build())
+                .sede(Sede.builder().nombre("Sede Centro").build()).build();
+        InscripcionCurso inscripcion = InscripcionCurso.builder().curso(curso).alumnoId("core-alumno-1")
+                .estado(EstadoInscripcionCurso.CURSANDO).build();
+        when(inscripciones.findByCursoIdAndAlumnoId(42L, "core-alumno-1"))
+                .thenReturn(Optional.of(inscripcion));
+        when(cursoDocentes.findByCursoIdOrderById(42L)).thenReturn(List.of());
+        var dto = new CursoDto.CargarNotaFinalDto(new BigDecimal("8.50"), EstadoInscripcionCurso.APROBADO,
+                LocalDate.of(2026, 10, 12));
+
+        var nota = servicio.cargarNota(42L, "core-alumno-1", dto);
+        servicio.cargarNota(42L, "core-alumno-1", dto);
+
+        assertThat(nota.alumnoId()).isEqualTo("core-alumno-1");
+        assertThat(nota.notaFinal()).isEqualByComparingTo("8.50");
+        assertThat(inscripcion.getEstado()).isEqualTo(EstadoInscripcionCurso.APROBADO);
+        verify(eventos, times(1)).publishEvent(any(EventoResultadoPublicado.class));
+    }
+
+    @Test
+    void rechazaEstadoNoFinalAlCargarNota() {
+        var dto = new CursoDto.CargarNotaFinalDto(new BigDecimal("8.50"), EstadoInscripcionCurso.CURSANDO,
+                LocalDate.of(2026, 10, 12));
+
+        assertThatThrownBy(() -> servicio.cargarNota(42L, "core-alumno-1", dto))
+                .hasMessageContaining("APROBADO o DESAPROBADO");
+        verifyNoInteractions(inscripciones);
     }
 
 }

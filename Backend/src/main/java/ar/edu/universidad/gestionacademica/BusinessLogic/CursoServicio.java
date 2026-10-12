@@ -29,7 +29,6 @@ public class CursoServicio {
     private final AulaRepositorio aulas;
     private final CursoDocenteRepositorio cursoDocentes;
     private final InscripcionCursoRepositorio inscripciones;
-    private final HorarioCursoRepositorio horarios;
     private final CorrelatividadRepositorio correlatividades;
     private final ApplicationEventPublisher eventos;
 
@@ -40,11 +39,14 @@ public class CursoServicio {
         if (!dto.horaFin().isAfter(dto.horaInicio())) {
             throw new ReglaNegocioException("La hora de fin del curso debe ser posterior a la de inicio");
         }
+        Aula aula = validarAula(dto.aulaId(), dto.sedeId(), dto.cupoMaximo());
+        validarDisponibilidad(aula.getId(), dto.diaSemana(), periodo.getId(), dto.horaInicio(), dto.horaFin());
         Curso curso = cursos.save(Curso.builder()
                 .codigo(dto.codigo().trim()).asignatura(buscarAsignatura(dto.asignaturaId())).periodo(periodo)
                 .sede(buscarSede(dto.sedeId())).modalidad(dto.modalidad()).cupoMaximo(dto.cupoMaximo())
                 .fechaInicio(dto.fechaInicio()).fechaFin(dto.fechaFin())
-                .turno(dto.turno()).horaInicio(dto.horaInicio()).horaFin(dto.horaFin()).build());
+                .turno(dto.turno()).horaInicio(dto.horaInicio()).horaFin(dto.horaFin())
+                .diaSemana(dto.diaSemana()).aula(aula).build());
         return respuesta(curso);
     }
 
@@ -59,8 +61,7 @@ public class CursoServicio {
         Curso curso = buscarCurso(cursoId);
         return new CursoDetalleAcademicoRespuestaDto(respuestaAcademica(curso),
                 cursoDocentes.findByCursoIdOrderById(cursoId).stream().map(this::respuesta).toList(),
-                inscripciones.findByCursoIdOrderByAlumnoId(cursoId).stream().map(this::respuesta).toList(),
-                horarios.findByCursoIdOrderByDiaSemanaAscHoraInicioAsc(cursoId).stream().map(this::respuesta).toList());
+                inscripciones.findByCursoIdOrderByAlumnoId(cursoId).stream().map(this::respuesta).toList());
     }
 
     public CursoDocenteRespuestaDto asignarDocente(Long cursoId, CrearCursoDocenteDto dto) {
@@ -111,28 +112,87 @@ public class CursoServicio {
         return respuesta(inscripcion);
     }
 
-    public HorarioCursoRespuestaDto agregarHorario(Long cursoId, CrearHorarioCursoDto dto) {
+    @Transactional(readOnly = true)
+    public List<NotaFinalCursoRespuestaDto> listarNotas(Long cursoId) {
+        buscarCurso(cursoId);
+        return inscripciones.findByCursoIdOrderByAlumnoId(cursoId).stream().map(this::respuestaNota).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public NotaFinalCursoRespuestaDto consultarNota(Long cursoId, String alumnoId) {
+        return respuestaNota(buscarInscripcion(cursoId, alumnoId));
+    }
+
+    public NotaFinalCursoRespuestaDto cargarNota(Long cursoId, String alumnoId, CargarNotaFinalDto dto) {
+        if (dto.estado() != EstadoInscripcionCurso.APROBADO
+                && dto.estado() != EstadoInscripcionCurso.DESAPROBADO) {
+            throw new ReglaNegocioException("La nota final requiere estado APROBADO o DESAPROBADO");
+        }
+        InscripcionCurso inscripcion = buscarInscripcion(cursoId, alumnoId);
+        if (inscripcion.getEstado() == EstadoInscripcionCurso.BAJA) {
+            throw new ReglaNegocioException("No se puede cargar una nota final a una inscripción dada de baja");
+        }
+        LocalDate fecha = dto.fechaResultado() == null ? LocalDate.now() : dto.fechaResultado();
+        boolean cambio = inscripcion.getNotaFinal() == null
+                || dto.notaFinal().compareTo(inscripcion.getNotaFinal()) != 0
+                || dto.estado() != inscripcion.getEstado()
+                || !fecha.equals(inscripcion.getFechaResultado());
+        inscripcion.setNotaFinal(dto.notaFinal());
+        inscripcion.setEstado(dto.estado());
+        inscripcion.setFechaResultado(fecha);
+        if (cambio) {
+            eventos.publishEvent(new EventoResultadoPublicado(eventoResultado(inscripcion)));
+        }
+        return respuestaNota(inscripcion);
+    }
+
+    private InscripcionCurso buscarInscripcion(Long cursoId, String alumnoId) {
+        return inscripciones.findByCursoIdAndAlumnoId(cursoId, alumnoId.trim())
+                .orElseThrow(() -> new RecursoNoEncontradoException("Inscripción no encontrada"));
+    }
+
+    private NotaFinalCursoRespuestaDto respuestaNota(InscripcionCurso inscripcion) {
+        return new NotaFinalCursoRespuestaDto(inscripcion.getAlumnoId(), inscripcion.getNotaFinal(),
+                inscripcion.getEstado(), inscripcion.getFechaResultado());
+    }
+
+    public CursoRespuestaDto actualizarHorario(Long cursoId, ActualizarHorarioCursoDto dto) {
         Curso curso = buscarCurso(cursoId);
         if (!dto.horaFin().isAfter(dto.horaInicio())) {
             throw new ReglaNegocioException("La hora de fin debe ser posterior a la de inicio");
         }
-        Aula aula = aulas.findById(dto.aulaId()).orElseThrow(() -> new RecursoNoEncontradoException("Aula no encontrada"));
+        Aula aula = validarAula(dto.aulaId(), curso.getSede().getId(), curso.getCupoMaximo());
+        if (cursos.existsByAulaIdAndDiaSemanaAndPeriodoIdAndHoraInicioLessThanAndHoraFinGreaterThanAndIdNot(
+                aula.getId(), dto.diaSemana(), curso.getPeriodo().getId(), dto.horaFin(), dto.horaInicio(), cursoId)) {
+            throw new ReglaNegocioException("El aula ya está ocupada en ese horario durante el período del curso");
+        }
+        curso.setAula(aula);
+        curso.setDiaSemana(dto.diaSemana());
+        curso.setHoraInicio(dto.horaInicio());
+        curso.setHoraFin(dto.horaFin());
+        return respuesta(curso);
+    }
+
+    private Aula validarAula(Long aulaId, Long sedeId, int cupoMaximo) {
+        Aula aula = aulas.findById(aulaId).orElseThrow(() -> new RecursoNoEncontradoException("Aula no encontrada"));
         if (aula.getTipo() != TipoUbicacion.AULA) {
             throw new ReglaNegocioException("Solo se pueden asignar ubicaciones de tipo AULA a un curso");
         }
-        if (!aula.getSede().getId().equals(curso.getSede().getId())) {
+        if (!aula.getSede().getId().equals(sedeId)) {
             throw new ReglaNegocioException("El aula debe pertenecer a la sede del curso");
         }
-        if (curso.getCupoMaximo() > aula.getCapacidadMaxima()) {
+        if (cupoMaximo > aula.getCapacidadMaxima()) {
             throw new ReglaNegocioException("El cupo del curso supera la capacidad del aula");
         }
-        if (horarios.existsByAulaIdAndDiaSemanaAndCursoPeriodoIdAndHoraInicioLessThanAndHoraFinGreaterThan(
-                aula.getId(), dto.diaSemana(), curso.getPeriodo().getId(), dto.horaFin(), dto.horaInicio())) {
+        return aula;
+    }
+
+    private void validarDisponibilidad(Long aulaId, java.time.DayOfWeek diaSemana, Long periodoId,
+                                       java.time.LocalTime horaInicio, java.time.LocalTime horaFin) {
+        if (cursos.existsByAulaIdAndDiaSemanaAndPeriodoIdAndHoraInicioLessThanAndHoraFinGreaterThan(
+                aulaId, diaSemana, periodoId, horaFin, horaInicio)) {
             throw new ReglaNegocioException("El aula ya está ocupada en ese horario durante el período del curso");
         }
-        HorarioCurso horario = horarios.save(HorarioCurso.builder().curso(curso).aula(aula)
-                .diaSemana(dto.diaSemana()).horaInicio(dto.horaInicio()).horaFin(dto.horaFin()).build());
-        return respuesta(horario);
     }
 
     private Curso buscarCurso(Long id) {
@@ -205,7 +265,8 @@ public class CursoServicio {
     private CursoRespuestaDto respuesta(Curso c) {
         return new CursoRespuestaDto(c.getId(), c.getCodigo(), c.getAsignatura().getId(), c.getPeriodo().getId(),
                 c.getSede().getId(), c.getModalidad(), c.getEstado(), c.getCupoMaximo(), c.getFechaInicio(),
-                c.getFechaFin(), c.getTurno(), c.getHoraInicio(), c.getHoraFin(),
+                c.getFechaFin(), c.getTurno(), c.getHoraInicio(), c.getHoraFin(), c.getDiaSemana(),
+                c.getAula() == null ? null : c.getAula().getId(),
                 inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA));
     }
     private CursoAcademicoRespuestaDto respuestaAcademica(Curso c) {
@@ -217,6 +278,7 @@ public class CursoServicio {
         return new CursoAcademicoRespuestaDto(c.getId(), c.getCodigo(), asignatura, periodo,
                 c.getSede().getId(), c.getModalidad(), c.getEstado(), c.getCupoMaximo(),
                 c.getFechaInicio(), c.getFechaFin(), c.getTurno(), c.getHoraInicio(), c.getHoraFin(),
+                c.getDiaSemana(), c.getAula() == null ? null : c.getAula().getId(),
                 inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA));
     }
     private CursoDocenteRespuestaDto respuesta(CursoDocente cd) {
@@ -225,8 +287,5 @@ public class CursoServicio {
     private InscripcionCursoRespuestaDto respuesta(InscripcionCurso i) {
         return new InscripcionCursoRespuestaDto(i.getId(), i.getAlumnoId(), i.getFechaInscripcion(), i.getEstado(),
                 i.getNotaFinal(), i.getFechaResultado());
-    }
-    private HorarioCursoRespuestaDto respuesta(HorarioCurso h) {
-        return new HorarioCursoRespuestaDto(h.getId(), h.getAula().getId(), h.getDiaSemana(), h.getHoraInicio(), h.getHoraFin());
     }
 }

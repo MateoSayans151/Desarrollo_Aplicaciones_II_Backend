@@ -4,8 +4,13 @@ Backend MVC/REST construido con Spring Boot 3, Java 17, Spring Data JPA, Spring 
 
 ## Integración con CORE
 
-Este servicio no expone login propio: recibe JWT de usuario validados con el JWKS de CORE.
-Definí estas variables fuera de Git antes de desplegar:
+La autenticación activa del backend usa usuarios locales y sesión HTTP. La validación
+de JWT emitidos por Core todavía no está implementada; por eso los endpoints nuevos
+de notas siguen sujetos a los roles administrativos actuales. Para habilitar el
+portal docente hay que acordar los claims de identidad y roles de Core y autorizar
+únicamente a los docentes asignados al curso.
+
+Variables previstas para esa integración:
 
 ```text
 CORE_JWT_JWK_SET_URI=https://core/.well-known/jwks.json
@@ -114,12 +119,15 @@ para testear la API:
 | POST | `/api/planificacion/asignaciones` | Asignar un aula |
 | GET | `/api/planificacion/aulas/{id}/agenda?fecha=AAAA-MM-DD` | Consultar agenda |
 | POST / GET | `/api/planificacion/periodos` | Crear/listar cuatrimestres |
-| POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Al crear requiere `turno` (`TARDE`, `MAÑANA`, `NOCHE`), `horaInicio` y `horaFin` (`HH:mm`); se devuelven al listar. |
-| GET | `/api/planificacion/cursos/{id}` | Consultar curso (incluidos turno y horas), docentes, inscripciones y horarios |
+| POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Al crear requiere turno, horas, `diaSemana` y `aulaId`. |
+| GET | `/api/planificacion/cursos/{id}` | Consultar curso, docentes e inscripciones |
 | PUT | `/api/planificacion/cursos/{id}/estado` | Actualizar estado del curso |
 | POST | `/api/planificacion/cursos/{id}/docentes` | Asignar docente externo al curso |
-| POST / PUT | `/api/planificacion/cursos/{id}/inscripciones` | Inscribir alumno o actualizar su resultado |
-| POST | `/api/planificacion/cursos/{id}/horarios` | Agregar aula y horario semanal |
+| POST | `/api/planificacion/cursos/{id}/inscripciones` | Inscribir alumno |
+| PUT | `/api/planificacion/cursos/{id}/inscripciones/{alumnoId}` | Actualizar estado o resultado de la inscripción |
+| GET | `/api/planificacion/cursos/{id}/notas` | Listar notas finales de alumnos inscriptos |
+| GET / PUT | `/api/planificacion/cursos/{id}/notas/{alumnoId}` | Consultar o cargar la nota final de un alumno |
+| PUT | `/api/planificacion/cursos/{id}/horario` | Actualizar día, aula y horas del curso |
 | POST / GET | `/api/planificacion/turnos-examen` | Crear/listar turnos |
 | POST | `/api/regularidad/validar` | Validar habilitación a final |
 | POST | `/api/usuarios/login` | Iniciar sesión |

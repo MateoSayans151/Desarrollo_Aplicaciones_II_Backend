@@ -49,9 +49,25 @@ public class CursoController {
         return servicio.actualizarInscripcion(cursoId, alumnoId, dto);
     }
 
-    @PostMapping("/{cursoId}/horarios") @ResponseStatus(HttpStatus.CREATED)
-    public HorarioCursoRespuestaDto agregarHorario(@PathVariable Long cursoId,
-                                                   @Valid @RequestBody CrearHorarioCursoDto dto) {
-        return servicio.agregarHorario(cursoId, dto);
+    @GetMapping("/{cursoId}/notas")
+    public List<NotaFinalCursoRespuestaDto> listarNotas(@PathVariable Long cursoId) {
+        return servicio.listarNotas(cursoId);
+    }
+
+    @GetMapping("/{cursoId}/notas/{alumnoId}")
+    public NotaFinalCursoRespuestaDto consultarNota(@PathVariable Long cursoId, @PathVariable String alumnoId) {
+        return servicio.consultarNota(cursoId, alumnoId);
+    }
+
+    @PutMapping("/{cursoId}/notas/{alumnoId}")
+    public NotaFinalCursoRespuestaDto cargarNota(@PathVariable Long cursoId, @PathVariable String alumnoId,
+                                                 @Valid @RequestBody CargarNotaFinalDto dto) {
+        return servicio.cargarNota(cursoId, alumnoId, dto);
+    }
+
+    @PutMapping("/{cursoId}/horario")
+    public CursoRespuestaDto actualizarHorario(@PathVariable Long cursoId,
+                                               @Valid @RequestBody ActualizarHorarioCursoDto dto) {
+        return servicio.actualizarHorario(cursoId, dto);
     }
 }

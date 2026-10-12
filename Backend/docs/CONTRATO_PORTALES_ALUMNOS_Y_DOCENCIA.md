@@ -39,6 +39,8 @@ El filtro `periodoId` es opcional. La respuesta es una lista con el DTO actual:
     "turno": "TARDE",
     "horaInicio": "14:00:00",
     "horaFin": "18:00:00",
+    "diaSemana": "MONDAY",
+    "aulaId": 4,
     "estado": "EN_CURSO",
     "cupoMaximo": 45,
     "fechaInicio": "2026-08-10",
@@ -54,7 +56,7 @@ Actualmente no admite `planId` y tampoco incluye el nombre de la asignatura. Par
 
 `GET /api/planificacion/cursos/{cursoId}`
 
-El curso incluye ahora los datos básicos de asignatura y período de forma anidada. El detalle también contiene las asignaciones docentes, inscripciones y horarios:
+El curso incluye ahora los datos básicos de asignatura y período de forma anidada. El detalle también contiene las asignaciones docentes e inscripciones:
 
 ```json
 {
@@ -80,6 +82,8 @@ El curso incluye ahora los datos básicos de asignatura y período de forma anid
     "turno": "TARDE",
     "horaInicio": "14:00:00",
     "horaFin": "18:00:00",
+    "diaSemana": "MONDAY",
+    "aulaId": 4,
     "estado": "EN_CURSO",
     "cupoMaximo": 45,
     "fechaInicio": "2026-08-10",
@@ -97,15 +101,6 @@ El curso incluye ahora los datos básicos de asignatura y período de forma anid
       "estado": "CURSANDO",
       "notaFinal": null,
       "fechaResultado": null
-    }
-  ],
-  "horarios": [
-    {
-      "id": 9,
-      "aulaId": 4,
-      "diaSemana": "MONDAY",
-      "horaInicio": "18:00:00",
-      "horaFin": "20:00:00"
     }
   ]
 }
@@ -127,11 +122,19 @@ El DTO de detalle refleja los datos que devuelve el endpoint. Los identificadore
   "turno": "TARDE",
   "horaInicio": "14:00",
   "horaFin": "18:00",
+  "diaSemana": "MONDAY",
+  "aulaId": 4,
   "cupoMaximo": 45,
   "fechaInicio": "2026-08-10",
   "fechaFin": "2026-11-30"
 }
 ```
+
+### Actualizar el único horario del curso
+
+`PUT /api/planificacion/cursos/{cursoId}/horario`
+
+Recibe `aulaId`, `diaSemana`, `horaInicio` y `horaFin`. Reemplaza esos campos en `Curso` y devuelve el curso actualizado.
 
 ## Inscripciones y resultados
 
@@ -175,6 +178,39 @@ Respuesta:
 ```
 
 Los valores admitidos para `estado` son `INSCRIPTO`, `CURSANDO`, `BAJA`, `REGULAR`, `LIBRE`, `APROBADO` y `DESAPROBADO`. `notaFinal` puede ser nula o estar entre 0 y 10.
+
+### Notas finales para el portal docente
+
+La nota pertenece a `InscripcionCurso`: cada inscripción ya identifica un `cursoId` y un
+`alumnoId` único y guarda `notaFinal`, `estado` y `fechaResultado`. `alumnoId` es el
+identificador externo del alumno provisto por Core; se conserva como `String` y no se
+reemplaza por el ID local de la inscripción ni por datos personales.
+
+`GET /api/planificacion/cursos/{cursoId}/notas` lista los alumnos inscriptos en el curso,
+incluidos los que todavía tienen `notaFinal: null`. Responde con una lista de objetos
+`{ alumnoId, notaFinal, estado, fechaResultado }` ordenada por `alumnoId`.
+
+`GET /api/planificacion/cursos/{cursoId}/notas/{alumnoId}` consulta un alumno inscripto.
+
+`PUT /api/planificacion/cursos/{cursoId}/notas/{alumnoId}` carga o corrige su nota final:
+
+```json
+{
+  "notaFinal": 8.5,
+  "estado": "APROBADO",
+  "fechaResultado": "2026-10-12"
+}
+```
+
+La nota debe estar entre 0 y 10, y el estado debe ser `APROBADO` o `DESAPROBADO`.
+Si se omite `fechaResultado`, se usa la fecha actual del servidor. La inscripción debe
+existir y no estar dada de baja. Una modificación publica el evento
+`resultado.publicado`; repetir la misma petición sin cambios no lo publica otra vez.
+
+Actualmente la seguridad del backend permite estas rutas a roles administrativos.
+El acceso directo del portal docente requiere integrar los JWT de Core y verificar
+que el `docenteId` autenticado esté asignado al curso. No se debe enviar ese ID
+como parámetro libre para autorizar la carga de notas.
 
 No existe actualmente un `GET` que liste las inscripciones de un `alumnoId`. El Portal no debe consultar el detalle de todos los cursos para reconstruir esa información.
 
@@ -280,14 +316,13 @@ Los módulos pueden copiar estos modelos mínimos para desarrollar con datos loc
 
 | Entidad | Campos del modelo actual relevantes para integración |
 | --- | --- |
-| `Curso` | `id: Long`, `codigo: String`, `asignaturaId: Long`, `periodoId: Long`, `sedeId: Long`, `modalidad: ModalidadCurso`, `estado: EstadoCurso`, `cupoMaximo: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `turno: TurnoCurso`, `horaInicio: LocalTime`, `horaFin: LocalTime` |
+| `Curso` | `id: Long`, `codigo: String`, `asignaturaId: Long`, `periodoId: Long`, `sedeId: Long`, `modalidad: ModalidadCurso`, `estado: EstadoCurso`, `cupoMaximo: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `turno: TurnoCurso`, `horaInicio: LocalTime`, `horaFin: LocalTime`, `diaSemana: DayOfWeek`, `aulaId: Long` |
 | `InscripcionCurso` | `id: Long`, `cursoId: Long`, `alumnoId: String`, `fechaInscripcion: LocalDate`, `estado: EstadoInscripcionCurso`, `notaFinal: BigDecimal?`, `fechaResultado: LocalDate?` |
 | `Asignatura` | `id: Long`, `codigo: String`, `nombre: String`, `anio: int`, `creditos: int`, `cargaHoraria: int`, `estado: EstadoAcademico`, `planId: Long` |
 | `Correlatividad` | `id: Long`, `asignaturaId: Long`, `correlativaId: Long`, `tipo: Correlatividad.Tipo` |
 | `PeriodoAcademico` | `id: Long`, `anio: int`, `numero: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `inscripcionDesde: LocalDate`, `inscripcionHasta: LocalDate` |
 | `TurnoExamen` | `id: Long`, `nombre: String`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `inscripcionDesde: LocalDate`, `inscripcionHasta: LocalDate` |
 | `CursoDocente` | `id: Long`, `cursoId: Long`, `docenteId: String`, `rol: RolDocenteCurso` |
-| `HorarioCurso` | `id: Long`, `cursoId: Long`, `aulaId: Long`, `diaSemana: DayOfWeek`, `horaInicio: LocalTime`, `horaFin: LocalTime` |
 | `Sede` | `id: Long`, `backofficeSiteId: UUID?`, `nombre: String`, `direccion: String`, `estado: String` |
 | `Aula` | `id: Long`, `backofficeLocationId: UUID?`, `codigo: String`, `nombre: String`, `tipo: TipoUbicacion`, `capacidadMaxima: int`, `sedeId: Long`, `estado: String` |
 

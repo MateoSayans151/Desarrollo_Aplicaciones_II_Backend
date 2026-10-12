@@ -6,6 +6,7 @@ import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.DayOfWeek;
 
 @Entity
 @Table(name = "cursos", uniqueConstraints = @UniqueConstraint(columnNames = {"periodo_id", "codigo"}))
@@ -51,4 +52,11 @@ public class Curso {
     private LocalTime horaInicio;
 
     private LocalTime horaFin;
+
+    @Enumerated(EnumType.STRING) @Column(length = 20)
+    private DayOfWeek diaSemana;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "aula_id")
+    private Aula aula;
 }

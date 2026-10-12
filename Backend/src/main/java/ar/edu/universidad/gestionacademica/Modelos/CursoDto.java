@@ -21,12 +21,15 @@ public final class CursoDto {
             @NotNull LocalDate fechaFin,
             @NotNull TurnoCurso turno,
             @NotNull LocalTime horaInicio,
-            @NotNull LocalTime horaFin) { }
+            @NotNull LocalTime horaFin,
+            @NotNull DayOfWeek diaSemana,
+            @NotNull Long aulaId) { }
 
     public record CursoRespuestaDto(Long id, String codigo, Long asignaturaId, Long periodoId, Long sedeId,
                                     ModalidadCurso modalidad, EstadoCurso estado, int cupoMaximo,
                                     LocalDate fechaInicio, LocalDate fechaFin, TurnoCurso turno,
-                                    LocalTime horaInicio, LocalTime horaFin, long inscriptosActivos) { }
+                                    LocalTime horaInicio, LocalTime horaFin, DayOfWeek diaSemana,
+                                    Long aulaId, long inscriptosActivos) { }
 
     public record ActualizarEstadoCursoDto(@NotNull EstadoCurso estado) { }
 
@@ -41,10 +44,13 @@ public final class CursoDto {
                                                EstadoInscripcionCurso estado, BigDecimal notaFinal,
                                                LocalDate fechaResultado) { }
 
-    public record CrearHorarioCursoDto(@NotNull Long aulaId, @NotNull DayOfWeek diaSemana,
-                                       @NotNull LocalTime horaInicio, @NotNull LocalTime horaFin) { }
-    public record HorarioCursoRespuestaDto(Long id, Long aulaId, DayOfWeek diaSemana,
-                                           LocalTime horaInicio, LocalTime horaFin) { }
+    public record CargarNotaFinalDto(@NotNull @DecimalMin("0.0") @DecimalMax("10.0") BigDecimal notaFinal,
+                                    @NotNull EstadoInscripcionCurso estado, LocalDate fechaResultado) { }
+    public record NotaFinalCursoRespuestaDto(String alumnoId, BigDecimal notaFinal,
+                                            EstadoInscripcionCurso estado, LocalDate fechaResultado) { }
+
+    public record ActualizarHorarioCursoDto(@NotNull Long aulaId, @NotNull DayOfWeek diaSemana,
+                                            @NotNull LocalTime horaInicio, @NotNull LocalTime horaFin) { }
 
     public record AsignaturaResumenDto(Long id, String codigo, String nombre) { }
     public record PeriodoResumenDto(Long id, int anio, int numero, LocalDate fechaInicio,
@@ -54,9 +60,9 @@ public final class CursoDto {
                                              PeriodoResumenDto periodo, Long sedeId, ModalidadCurso modalidad,
                                              EstadoCurso estado, int cupoMaximo, LocalDate fechaInicio,
                                              LocalDate fechaFin, TurnoCurso turno, LocalTime horaInicio,
-                                             LocalTime horaFin, long inscriptosActivos) { }
+                                             LocalTime horaFin, DayOfWeek diaSemana, Long aulaId,
+                                             long inscriptosActivos) { }
     public record CursoDetalleAcademicoRespuestaDto(CursoAcademicoRespuestaDto curso,
                                                     List<CursoDocenteRespuestaDto> docentes,
-                                                    List<InscripcionCursoRespuestaDto> inscripciones,
-                                                    List<HorarioCursoRespuestaDto> horarios) { }
+                                                    List<InscripcionCursoRespuestaDto> inscripciones) { }
 }
