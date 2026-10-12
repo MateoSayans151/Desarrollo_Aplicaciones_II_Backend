@@ -5,10 +5,8 @@ Backend MVC/REST construido con Spring Boot 3, Java 17, Spring Data JPA, Spring 
 ## Integración con CORE
 
 La autenticación activa del backend usa usuarios locales y sesión HTTP. La validación
-de JWT emitidos por Core todavía no está implementada; por eso los endpoints nuevos
-de notas siguen sujetos a los roles administrativos actuales. Para habilitar el
-portal docente hay que acordar los claims de identidad y roles de Core y autorizar
-únicamente a los docentes asignados al curso.
+de JWT emitidos por Core todavía no está implementada. La API de notas usa el nombre
+de campo compartido `alumnoId` para identificar al alumno en las inscripciones.
 
 Variables previstas para esa integración:
 

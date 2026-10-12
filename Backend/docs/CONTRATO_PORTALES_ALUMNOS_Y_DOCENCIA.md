@@ -182,9 +182,9 @@ Los valores admitidos para `estado` son `INSCRIPTO`, `CURSANDO`, `BAJA`, `REGULA
 ### Notas finales para el portal docente
 
 La nota pertenece a `InscripcionCurso`: cada inscripción ya identifica un `cursoId` y un
-`alumnoId` único y guarda `notaFinal`, `estado` y `fechaResultado`. `alumnoId` es el
-identificador externo del alumno provisto por Core; se conserva como `String` y no se
-reemplaza por el ID local de la inscripción ni por datos personales.
+`alumnoId` único y guarda `notaFinal`, `estado` y `fechaResultado`. Se usa el nombre
+compartido entre módulos, `alumnoId`, para el identificador del alumno; se conserva
+como `String` y no se reemplaza por el ID local de la inscripción.
 
 `GET /api/planificacion/cursos/{cursoId}/notas` lista los alumnos inscriptos en el curso,
 incluidos los que todavía tienen `notaFinal: null`. Responde con una lista de objetos
@@ -208,9 +208,8 @@ existir y no estar dada de baja. Una modificación publica el evento
 `resultado.publicado`; repetir la misma petición sin cambios no lo publica otra vez.
 
 Actualmente la seguridad del backend permite estas rutas a roles administrativos.
-El acceso directo del portal docente requiere integrar los JWT de Core y verificar
-que el `docenteId` autenticado esté asignado al curso. No se debe enviar ese ID
-como parámetro libre para autorizar la carga de notas.
+La autorización del portal docente se define por separado del contrato de nombres
+y datos de esta API.
 
 No existe actualmente un `GET` que liste las inscripciones de un `alumnoId`. El Portal no debe consultar el detalle de todos los cursos para reconstruir esa información.
 
