@@ -74,11 +74,13 @@ class CursoServicioTest {
                 .build();
         Curso curso = Curso.builder()
                 .id(42L).codigo("DDA2-A").asignatura(asignatura).periodo(periodo)
-                .sede(Sede.builder().id(2L).build()).modalidad(ModalidadCurso.PRESENCIAL)
+                .sede(Sede.builder().id(2L).nombre("Sede Centro").direccion("Av. 123").build())
+                .modalidad(ModalidadCurso.PRESENCIAL)
                 .estado(EstadoCurso.EN_CURSO).cupoMaximo(45)
                 .fechaInicio(LocalDate.of(2026, 8, 10)).fechaFin(LocalDate.of(2026, 11, 30))
                 .turno(TurnoCurso.TARDE).horaInicio(LocalTime.of(14, 0)).horaFin(LocalTime.of(18, 0))
-                .diaSemana(DayOfWeek.MONDAY).aula(Aula.builder().id(3L).build())
+                .diaSemana(DayOfWeek.MONDAY).aula(Aula.builder().id(3L).codigo("A-3")
+                        .nombre("Laboratorio 3").build())
                 .build();
 
         when(cursos.findById(42L)).thenReturn(Optional.of(curso));
@@ -101,6 +103,45 @@ class CursoServicioTest {
         assertThat(detalle.curso().horaFin()).isEqualTo(LocalTime.of(18, 0));
         assertThat(detalle.curso().diaSemana()).isEqualTo(DayOfWeek.MONDAY);
         assertThat(detalle.curso().aulaId()).isEqualTo(3L);
+        assertThat(detalle.curso().sedeNombre()).isEqualTo("Sede Centro");
+        assertThat(detalle.curso().aulaNombre()).isEqualTo("Laboratorio 3");
+    }
+
+    @Test
+    void listaLasInscripcionesDeUnAlumnoConCursoAsignaturaYPeriodo() {
+        Asignatura asignatura = Asignatura.builder().id(15L).codigo("DDA2")
+                .nombre("Desarrollo de Aplicaciones II").build();
+        PeriodoAcademico periodo = PeriodoAcademico.builder().id(8L).anio(2026).numero(2)
+                .fechaInicio(LocalDate.of(2026, 8, 1)).fechaFin(LocalDate.of(2026, 11, 30))
+                .inscripcionDesde(LocalDate.of(2026, 7, 1)).inscripcionHasta(LocalDate.of(2026, 7, 31)).build();
+        Curso curso = Curso.builder().id(42L).codigo("DDA2-A").asignatura(asignatura).periodo(periodo)
+                .sede(Sede.builder().id(2L).build()).modalidad(ModalidadCurso.PRESENCIAL)
+                .estado(EstadoCurso.EN_CURSO).cupoMaximo(45).fechaInicio(LocalDate.of(2026, 8, 10))
+                .fechaFin(LocalDate.of(2026, 11, 30)).build();
+        InscripcionCurso inscripcion = InscripcionCurso.builder().id(71L).curso(curso).alumnoId("alumno-456")
+                .fechaInscripcion(LocalDate.of(2026, 7, 15)).estado(EstadoInscripcionCurso.CURSANDO).build();
+        when(inscripciones.findByAlumnoIdAndCursoPeriodoIdOrderByCursoCodigoAsc("alumno-456", 8L))
+                .thenReturn(List.of(inscripcion));
+
+        var resultado = servicio.listarInscripcionesAlumno(" alumno-456 ", 8L);
+
+        assertThat(resultado).hasSize(1);
+        assertThat(resultado.get(0).alumnoId()).isEqualTo("alumno-456");
+        assertThat(resultado.get(0).curso().id()).isEqualTo(42L);
+        assertThat(resultado.get(0).curso().asignatura().nombre()).isEqualTo("Desarrollo de Aplicaciones II");
+        assertThat(resultado.get(0).curso().periodo().id()).isEqualTo(8L);
+        verify(inscripciones).findByAlumnoIdAndCursoPeriodoIdOrderByCursoCodigoAsc("alumno-456", 8L);
+    }
+
+    @Test
+    void listaTodasLasInscripcionesDelAlumnoCuandoNoSeIndicaPeriodo() {
+        when(inscripciones.findByAlumnoIdOrderByCursoPeriodoIdDescCursoCodigoAsc("alumno-456"))
+                .thenReturn(List.of());
+
+        var resultado = servicio.listarInscripcionesAlumno("alumno-456", null);
+
+        assertThat(resultado).isEmpty();
+        verify(inscripciones).findByAlumnoIdOrderByCursoPeriodoIdDescCursoCodigoAsc("alumno-456");
     }
 
     @Test

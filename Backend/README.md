@@ -4,6 +4,10 @@ Backend MVC/REST construido con Spring Boot 3, Java 17, Spring Data JPA, Spring 
 
 ## Integración con CORE
 
+Las respuestas de cursos incluyen `sedeNombre` y `aulaNombre` además de `sedeId`
+y `aulaId`. Los nombres se leen de las tablas `sedes` y `aulas`; no se agregan
+columnas a `cursos`.
+
 La autenticación activa del backend usa usuarios locales y sesión HTTP. La validación
 de JWT emitidos por Core todavía no está implementada. La API de notas usa el nombre
 de campo compartido `alumnoId` para identificar al alumno en las inscripciones.
@@ -20,6 +24,11 @@ Los endpoints de este servicio se implementan bajo `/api/planificacion`,
 `/api/academica` y otros controladores del módulo. La ruta externa del gateway
 se configura por separado. Las comprobaciones de vida están en `GET /health/live`
 y `GET /health/ready`.
+
+Al crear un aula con `POST /api/planificacion/sedes/{id}/aulas`, se puede enviar
+`nombre` además de `codigo` y `capacidadMaxima`. Si se omite, se utiliza su código.
+Las sedes ya tienen nombre. La base existente no necesita migración para exponerlos
+en las respuestas de cursos.
 
 ## Estructura
 
@@ -113,16 +122,17 @@ para testear la API:
 | POST / GET | `/api/academica/planes/{id}/asignaturas` | Crear/listar asignaturas |
 | POST / GET | `/api/academica/asignaturas/{id}/correlatividades` | Gestionar correlativas |
 | POST / GET | `/api/planificacion/sedes` | Crear/listar sedes |
-| POST / GET | `/api/planificacion/sedes/{id}/aulas` | Crear/listar aulas |
+| POST / GET | `/api/planificacion/sedes/{id}/aulas` | Crear/listar aulas; nombre opcional al crear |
 | POST | `/api/planificacion/asignaciones` | Asignar un aula |
 | GET | `/api/planificacion/aulas/{id}/agenda?fecha=AAAA-MM-DD` | Consultar agenda |
 | POST / GET | `/api/planificacion/periodos` | Crear/listar cuatrimestres |
-| POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Al crear requiere turno, horas, `diaSemana` y `aulaId`. |
+| POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Las respuestas incluyen `sedeNombre` y `aulaNombre`. Al crear requiere turno, horas, `diaSemana` y `aulaId`. |
 | GET | `/api/planificacion/cursos/{id}` | Consultar curso, docentes e inscripciones |
 | PUT | `/api/planificacion/cursos/{id}/estado` | Actualizar estado del curso |
 | POST | `/api/planificacion/cursos/{id}/docentes` | Asignar docente externo al curso |
 | POST | `/api/planificacion/cursos/{id}/inscripciones` | Inscribir alumno |
 | PUT | `/api/planificacion/cursos/{id}/inscripciones/{alumnoId}` | Actualizar estado o resultado de la inscripción |
+| GET | `/api/planificacion/alumnos/{alumnoId}/inscripciones?periodoId={id}` | Listar inscripciones de un alumno; el período es opcional |
 | GET | `/api/planificacion/cursos/{id}/notas` | Listar notas finales de alumnos inscriptos |
 | GET / PUT | `/api/planificacion/cursos/{id}/notas/{alumnoId}` | Consultar o cargar la nota final de un alumno |
 | PUT | `/api/planificacion/cursos/{id}/horario` | Actualizar día, aula y horas del curso |

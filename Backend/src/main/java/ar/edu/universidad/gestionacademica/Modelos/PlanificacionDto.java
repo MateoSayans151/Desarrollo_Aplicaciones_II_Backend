@@ -14,7 +14,8 @@ public final class PlanificacionDto {
     public record SedeRespuestaDto(Long id, String nombre, String direccion, UUID backofficeSiteId,
                                    String estado) { }
 
-    public record CrearAulaDto(@NotBlank String codigo, @Positive int capacidadMaxima) { }
+    public record CrearAulaDto(@NotBlank String codigo, @Positive int capacidadMaxima,
+                               @Size(max = 255) String nombre) { }
     public record AulaRespuestaDto(Long id, String codigo, String nombre, UUID backofficeLocationId, TipoUbicacion tipo,
                                    int capacidadMaxima, Long sedeId, String estado) { }
 

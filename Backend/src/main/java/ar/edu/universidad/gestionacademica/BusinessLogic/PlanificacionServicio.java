@@ -24,7 +24,7 @@ public class PlanificacionServicio {
     private final TurnoExamenRepositorio turnos;
 
     public SedeRespuestaDto crearSede(CrearSedeDto dto) {
-        Sede s = sedes.save(Sede.builder().nombre(dto.nombre()).direccion(dto.direccion()).build());
+        Sede s = sedes.save(Sede.builder().nombre(dto.nombre().trim()).direccion(dto.direccion().trim()).build());
         return sede(s);
     }
     @Transactional(readOnly = true)
@@ -33,7 +33,9 @@ public class PlanificacionServicio {
     }
     public AulaRespuestaDto crearAula(Long sedeId, CrearAulaDto dto) {
         Sede sede = sedes.findById(sedeId).orElseThrow(() -> new RecursoNoEncontradoException("Sede no encontrada"));
-        Aula a = aulas.save(Aula.builder().codigo(dto.codigo()).nombre(dto.codigo())
+        String codigo = dto.codigo().trim();
+        String nombre = dto.nombre() == null || dto.nombre().isBlank() ? codigo : dto.nombre().trim();
+        Aula a = aulas.save(Aula.builder().codigo(codigo).nombre(nombre)
                 .capacidadMaxima(dto.capacidadMaxima())
                 .tipo(TipoUbicacion.AULA).sede(sede).build());
         return aula(a);
@@ -92,7 +94,8 @@ public class PlanificacionServicio {
         if (!fin.isAfter(inicio)) throw new ReglaNegocioException("El fin de " + nombre + " debe ser posterior al inicio");
     }
     private SedeRespuestaDto sede(Sede s) {
-        return new SedeRespuestaDto(s.getId(), s.getNombre(), s.getDireccion(), s.getBackofficeSiteId(), s.getEstado());
+        return new SedeRespuestaDto(s.getId(), s.getNombre(), s.getDireccion(), s.getBackofficeSiteId(),
+                s.getEstado());
     }
     private AulaRespuestaDto aula(Aula a) {
         return new AulaRespuestaDto(a.getId(), a.getCodigo(), a.getNombre(), a.getBackofficeLocationId(), a.getTipo(),

@@ -29,7 +29,8 @@ public final class CursoDto {
                                     ModalidadCurso modalidad, EstadoCurso estado, int cupoMaximo,
                                     LocalDate fechaInicio, LocalDate fechaFin, TurnoCurso turno,
                                     LocalTime horaInicio, LocalTime horaFin, DayOfWeek diaSemana,
-                                    Long aulaId, long inscriptosActivos) { }
+                                    Long aulaId, long inscriptosActivos, String sedeNombre,
+                                    String aulaNombre) { }
 
     public record ActualizarEstadoCursoDto(@NotNull EstadoCurso estado) { }
 
@@ -61,8 +62,13 @@ public final class CursoDto {
                                              EstadoCurso estado, int cupoMaximo, LocalDate fechaInicio,
                                              LocalDate fechaFin, TurnoCurso turno, LocalTime horaInicio,
                                              LocalTime horaFin, DayOfWeek diaSemana, Long aulaId,
-                                             long inscriptosActivos) { }
+                                             long inscriptosActivos, String sedeNombre,
+                                             String aulaNombre) { }
     public record CursoDetalleAcademicoRespuestaDto(CursoAcademicoRespuestaDto curso,
                                                     List<CursoDocenteRespuestaDto> docentes,
                                                     List<InscripcionCursoRespuestaDto> inscripciones) { }
+
+    public record InscripcionAlumnoRespuestaDto(Long id, String alumnoId, LocalDate fechaInscripcion,
+                                                EstadoInscripcionCurso estado, BigDecimal notaFinal,
+                                                LocalDate fechaResultado, CursoAcademicoRespuestaDto curso) { }
 }

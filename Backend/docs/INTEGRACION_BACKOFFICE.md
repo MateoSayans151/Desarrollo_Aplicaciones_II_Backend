@@ -66,6 +66,9 @@ Se conservan las claves numéricas locales que ya usan Cursos, Horarios y Asigna
 
 La entidad Sede mantiene su id: Long como clave primaria local. Por eso Curso.sedeId sigue siendo el ID local; al sincronizar cursos y sedes, el servicio debe resolver el siteId externo y asociar la sede local correspondiente.
 
+Las respuestas de cursos incluyen `sedeNombre` y `aulaNombre`, leídos de las entidades
+locales relacionadas, junto a `sedeId` y `aulaId`.
+
 ## Configuración preparada
 
 En src/main/resources/application.properties quedaron comentadas estas propiedades:

@@ -12,20 +12,41 @@ El Portal de Docencia consume estas rutas con `ROLE_ADMINISTRATIVO` (o `ROLE_ACA
 
 | Requerimiento | Estado actual | Uso o extensión recomendada |
 | --- | --- | --- |
-| Mostrar las materias/cursos de un alumno | No existe una consulta por alumno. El detalle de un curso incluye sus inscripciones, pero no debe usarse para componer esta vista. | Incorporar `GET /api/planificacion/alumnos/{alumnoId}/inscripciones?periodoId={id}`. Debe devolver cada inscripción junto con el curso y la asignatura. |
+| Mostrar las materias/cursos de un alumno | Implementado. | Usar `GET /api/planificacion/alumnos/{alumnoId}/inscripciones?periodoId={id}`. Devuelve cada inscripción junto con el curso, la asignatura y el período. |
 | Mostrar correlatividades | Implementado. | Usar `GET /api/academica/asignaturas/{asignaturaId}/correlatividades`. La regla también se valida al inscribir al alumno. |
-| Determinar si una asignatura pertenece a un plan/carrera | No existe una consulta puntual. | Obtener los planes de la carrera y luego las asignaturas del plan; o incorporar un filtro `planId` al listado de cursos para evitar el filtrado del lado del Portal. |
+| Determinar si una asignatura pertenece a un plan/carrera | No existe una consulta puntual. | Usar `GET /api/academica/carreras/{carreraId}/planes` y luego `GET /api/academica/planes/{planId}/asignaturas`. Si no se conoce el ID de la carrera, obtenerlo con `GET /api/academica/carreras`. Para filtrar cursos de un plan, comparar los `asignaturaId` del listado de cursos con los IDs de esas asignaturas. |
 | Mostrar el nombre de la asignatura en el listado de cursos | El listado devuelve solamente `asignaturaId`. El detalle de un curso ya trae el nombre. | Ampliar la respuesta de `GET /api/planificacion/cursos` con `asignatura: { id, codigo, nombre }`; es preferible a hacer un detalle por cada curso. |
 
-Las extensiones indicadas en esta tabla son propuestas y **no están implementadas actualmente**.
+Las filas marcadas como pendientes describen propuestas que todavía no están implementadas.
+
+## Carreras, planes y asignaturas
+
+Estas consultas ya existen en Gestión Académica:
+
+| Método | Ruta | Devuelve |
+| --- | --- | --- |
+| `GET` | `/api/academica/carreras` | Carreras con `id`, `codigo`, `nombre`, `facultad`, `duracion`, `titulo` y `estado`. Sirve para encontrar el `carreraId`. |
+| `GET` | `/api/academica/carreras/{carreraId}/planes` | Planes de esa carrera con `id`, `codigo`, `nombre`, `vigenciaDesde`, `cantidadAsignaturas`, `estado` y `carreraId`. |
+| `GET` | `/api/academica/planes/{planId}/asignaturas` | Asignaturas de ese plan con `id`, `codigo`, `nombre`, `anio`, `creditos`, `cargaHoraria`, `estado` y `planId`. |
+
+Para comprobar si una asignatura pertenece a una carrera, consultar los planes de la
+carrera y buscar su `id` en las asignaturas de cada plan. Si ya se conoce el `planId`,
+alcanza con la última consulta. `GET /api/planificacion/cursos` devuelve `asignaturaId`,
+que puede compararse con esos IDs para identificar los cursos correspondientes.
+Actualmente no hay una consulta directa por par `carreraId`/`asignaturaId` ni un
+filtro `planId` en el listado de cursos. Estas rutas usan los permisos de lectura
+académica indicados en el alcance de este contrato.
 
 ## Cursos
+
+Los nombres de sede y aula se consultan desde sus tablas relacionadas. No se duplican
+en `cursos`; las respuestas muestran el nombre vigente junto a `sedeId` y `aulaId`.
 
 ### Listar cursos
 
 `GET /api/planificacion/cursos?periodoId={id}`
 
-El filtro `periodoId` es opcional. La respuesta es una lista con el DTO actual:
+El filtro `periodoId` es opcional. La respuesta incluye `sedeNombre` y `aulaNombre` junto a sus IDs. `aulaNombre` puede ser `null` si no hay aula asociada:
 
 ```json
 [
@@ -35,12 +56,14 @@ El filtro `periodoId` es opcional. La respuesta es una lista con el DTO actual:
     "asignaturaId": 15,
     "periodoId": 8,
     "sedeId": 2,
+    "sedeNombre": "Sede Centro",
     "modalidad": "PRESENCIAL",
     "turno": "TARDE",
     "horaInicio": "14:00:00",
     "horaFin": "18:00:00",
     "diaSemana": "MONDAY",
     "aulaId": 4,
+    "aulaNombre": "Laboratorio 4",
     "estado": "EN_CURSO",
     "cupoMaximo": 45,
     "fechaInicio": "2026-08-10",
@@ -56,7 +79,7 @@ Actualmente no admite `planId` y tampoco incluye el nombre de la asignatura. Par
 
 `GET /api/planificacion/cursos/{cursoId}`
 
-El curso incluye ahora los datos básicos de asignatura y período de forma anidada. El detalle también contiene las asignaciones docentes e inscripciones:
+El curso incluye datos de asignatura y período de forma anidada, y los nombres de sede y aula. El detalle también contiene las asignaciones docentes e inscripciones:
 
 ```json
 {
@@ -78,12 +101,14 @@ El curso incluye ahora los datos básicos de asignatura y período de forma anid
       "inscripcionHasta": "2026-07-31"
     },
     "sedeId": 2,
+    "sedeNombre": "Sede Centro",
     "modalidad": "PRESENCIAL",
     "turno": "TARDE",
     "horaInicio": "14:00:00",
     "horaFin": "18:00:00",
     "diaSemana": "MONDAY",
     "aulaId": 4,
+    "aulaNombre": "Laboratorio 4",
     "estado": "EN_CURSO",
     "cupoMaximo": 45,
     "fechaInicio": "2026-08-10",
@@ -137,6 +162,15 @@ El DTO de detalle refleja los datos que devuelve el endpoint. Los identificadore
 Recibe `aulaId`, `diaSemana`, `horaInicio` y `horaFin`. Reemplaza esos campos en `Curso` y devuelve el curso actualizado.
 
 ## Inscripciones y resultados
+
+### Listar inscripciones de un alumno
+
+`GET /api/planificacion/alumnos/{alumnoId}/inscripciones?periodoId={id}`
+
+El filtro `periodoId` es opcional. La respuesta se ordena por período descendente y, dentro del
+período, por código de curso. Cada elemento incluye el estado y resultado de la inscripción, y el
+curso con su asignatura y período. Este es el endpoint que debe usar el Portal de Alumnos para
+mostrar las materias de un alumno.
 
 ### Inscribir alumno
 
@@ -211,7 +245,7 @@ Actualmente la seguridad del backend permite estas rutas a roles administrativos
 La autorización del portal docente se define por separado del contrato de nombres
 y datos de esta API.
 
-No existe actualmente un `GET` que liste las inscripciones de un `alumnoId`. El Portal no debe consultar el detalle de todos los cursos para reconstruir esa información.
+Para listar las inscripciones de un alumno se usa `GET /api/planificacion/alumnos/{alumnoId}/inscripciones`; cada elemento incluye el mismo resumen de curso con sede y aula.
 
 ## Correlatividades
 
@@ -315,7 +349,7 @@ Los módulos pueden copiar estos modelos mínimos para desarrollar con datos loc
 
 | Entidad | Campos del modelo actual relevantes para integración |
 | --- | --- |
-| `Curso` | `id: Long`, `codigo: String`, `asignaturaId: Long`, `periodoId: Long`, `sedeId: Long`, `modalidad: ModalidadCurso`, `estado: EstadoCurso`, `cupoMaximo: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `turno: TurnoCurso`, `horaInicio: LocalTime`, `horaFin: LocalTime`, `diaSemana: DayOfWeek`, `aulaId: Long` |
+| `Curso` | `id: Long`, `codigo: String`, `asignaturaId: Long`, `periodoId: Long`, `sedeId: Long`, `modalidad: ModalidadCurso`, `estado: EstadoCurso`, `cupoMaximo: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `turno: TurnoCurso`, `horaInicio: LocalTime`, `horaFin: LocalTime`, `diaSemana: DayOfWeek`, `aulaId: Long?`; las respuestas incluyen `sedeNombre: String` y `aulaNombre: String?` |
 | `InscripcionCurso` | `id: Long`, `cursoId: Long`, `alumnoId: String`, `fechaInscripcion: LocalDate`, `estado: EstadoInscripcionCurso`, `notaFinal: BigDecimal?`, `fechaResultado: LocalDate?` |
 | `Asignatura` | `id: Long`, `codigo: String`, `nombre: String`, `anio: int`, `creditos: int`, `cargaHoraria: int`, `estado: EstadoAcademico`, `planId: Long` |
 | `Correlatividad` | `id: Long`, `asignaturaId: Long`, `correlativaId: Long`, `tipo: Correlatividad.Tipo` |

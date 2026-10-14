@@ -1,6 +1,7 @@
 package ar.edu.universidad.gestionacademica.Repositorios;
 
 import ar.edu.universidad.gestionacademica.Entidades.Curso;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -8,6 +9,10 @@ import java.time.DayOfWeek;
 import java.time.LocalTime;
 
 public interface CursoRepositorio extends JpaRepository<Curso, Long> {
+    @Override
+    @EntityGraph(attributePaths = {"asignatura", "periodo", "sede", "aula"})
+    List<Curso> findAll();
+    @EntityGraph(attributePaths = {"asignatura", "periodo", "sede", "aula"})
     List<Curso> findByPeriodoIdOrderByCodigo(Long periodoId);
     boolean existsByAulaIdAndDiaSemanaAndPeriodoIdAndHoraInicioLessThanAndHoraFinGreaterThan(
             Long aulaId, DayOfWeek diaSemana, Long periodoId, LocalTime horaFin, LocalTime horaInicio);

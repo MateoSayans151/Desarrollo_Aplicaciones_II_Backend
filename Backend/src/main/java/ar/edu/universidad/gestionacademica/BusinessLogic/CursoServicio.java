@@ -64,6 +64,15 @@ public class CursoServicio {
                 inscripciones.findByCursoIdOrderByAlumnoId(cursoId).stream().map(this::respuesta).toList());
     }
 
+    @Transactional(readOnly = true)
+    public List<InscripcionAlumnoRespuestaDto> listarInscripcionesAlumno(String alumnoId, Long periodoId) {
+        String alumnoIdNormalizado = alumnoId.trim();
+        List<InscripcionCurso> encontradas = periodoId == null
+                ? inscripciones.findByAlumnoIdOrderByCursoPeriodoIdDescCursoCodigoAsc(alumnoIdNormalizado)
+                : inscripciones.findByAlumnoIdAndCursoPeriodoIdOrderByCursoCodigoAsc(alumnoIdNormalizado, periodoId);
+        return encontradas.stream().map(this::respuestaAlumno).toList();
+    }
+
     public CursoDocenteRespuestaDto asignarDocente(Long cursoId, CrearCursoDocenteDto dto) {
         Curso curso = buscarCurso(cursoId);
         if (cursoDocentes.existsByCursoIdAndDocenteId(cursoId, dto.docenteId())) {
@@ -267,7 +276,8 @@ public class CursoServicio {
                 c.getSede().getId(), c.getModalidad(), c.getEstado(), c.getCupoMaximo(), c.getFechaInicio(),
                 c.getFechaFin(), c.getTurno(), c.getHoraInicio(), c.getHoraFin(), c.getDiaSemana(),
                 c.getAula() == null ? null : c.getAula().getId(),
-                inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA));
+                inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA),
+                c.getSede().getNombre(), c.getAula() == null ? null : c.getAula().getNombre());
     }
     private CursoAcademicoRespuestaDto respuestaAcademica(Curso c) {
         AsignaturaResumenDto asignatura = new AsignaturaResumenDto(c.getAsignatura().getId(),
@@ -279,7 +289,8 @@ public class CursoServicio {
                 c.getSede().getId(), c.getModalidad(), c.getEstado(), c.getCupoMaximo(),
                 c.getFechaInicio(), c.getFechaFin(), c.getTurno(), c.getHoraInicio(), c.getHoraFin(),
                 c.getDiaSemana(), c.getAula() == null ? null : c.getAula().getId(),
-                inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA));
+                inscripciones.countByCursoIdAndEstadoNot(c.getId(), EstadoInscripcionCurso.BAJA),
+                c.getSede().getNombre(), c.getAula() == null ? null : c.getAula().getNombre());
     }
     private CursoDocenteRespuestaDto respuesta(CursoDocente cd) {
         return new CursoDocenteRespuestaDto(cd.getId(), cd.getDocenteId(), cd.getRol());
@@ -287,5 +298,9 @@ public class CursoServicio {
     private InscripcionCursoRespuestaDto respuesta(InscripcionCurso i) {
         return new InscripcionCursoRespuestaDto(i.getId(), i.getAlumnoId(), i.getFechaInscripcion(), i.getEstado(),
                 i.getNotaFinal(), i.getFechaResultado());
+    }
+    private InscripcionAlumnoRespuestaDto respuestaAlumno(InscripcionCurso i) {
+        return new InscripcionAlumnoRespuestaDto(i.getId(), i.getAlumnoId(), i.getFechaInscripcion(), i.getEstado(),
+                i.getNotaFinal(), i.getFechaResultado(), respuestaAcademica(i.getCurso()));
     }
 }
