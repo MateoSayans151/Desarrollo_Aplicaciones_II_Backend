@@ -39,7 +39,7 @@ public class ConfiguracionSeguridad {
                 .cors(cors -> cors.configurationSource(origenesCors))
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/health/live", "/health/ready", "/swagger-ui/**", "/swagger-ui.html",
+                        .requestMatchers("/error", "/health/live", "/health/ready", "/swagger-ui/**", "/swagger-ui.html",
                                 "/v3/api-docs/**", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/academica/**", "/api/planificacion/**")
                                 .hasAnyAuthority(AUTORIDADES_ADMINISTRATIVAS)
