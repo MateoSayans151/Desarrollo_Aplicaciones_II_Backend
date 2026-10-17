@@ -32,7 +32,8 @@ public class ConfiguracionSeguridad {
                                 "/v3/api-docs/**", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/academica/**", "/api/planificacion/**")
                                 .hasAnyAuthority("ROLE_ADMINISTRATIVO", "ROLE_ACADEMIC_ADMIN")
-                        .requestMatchers("/api/**").hasAnyAuthority("ROLE_ADMINISTRATIVO", "ROLE_ACADEMIC_ADMIN")
+                        .requestMatchers("/api/**").hasAnyAuthority(
+                                "ROLE_ADMINISTRATIVO", "ROLE_ACADEMIC_ADMIN")
                         .anyRequest().denyAll())
                 .build();
     }

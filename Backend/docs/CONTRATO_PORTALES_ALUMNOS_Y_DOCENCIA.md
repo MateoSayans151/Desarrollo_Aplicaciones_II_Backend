@@ -6,7 +6,38 @@ Este documento describe los endpoints y modelos que existen actualmente en Gesti
 
 Las rutas siguientes son las que implementa directamente este servicio. El gateway institucional puede publicar un prefijo distinto.
 
-El Portal de Docencia consume estas rutas con `ROLE_ADMINISTRATIVO` (o `ROLE_ACADEMIC_ADMIN`) y puede luego presentar la información al alumno. No se exponen endpoints públicos ni de autoservicio directamente desde este servicio.
+El Portal de Docencia consume estas rutas con `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN` y puede luego presentar la información al alumno. No se exponen endpoints públicos ni de autoservicio directamente desde este servicio.
+
+## Formato obligatorio de códigos
+
+Los códigos nuevos de carreras, planes de estudio, asignaturas y cursos deben cumplir
+la expresión regular `^[A-Z]{3}[0-9]?-[0-9]{3}$`. Se aceptan exactamente estos dos
+formatos:
+
+- Tres letras mayúsculas, guion y tres dígitos: `ARQ-001`.
+- Tres letras mayúsculas, un dígito, guion y tres dígitos: `ARQ1-001`.
+
+Los `POST` correspondientes y la actualización de carreras responden HTTP 400 cuando
+el código no respeta el formato. Los módulos consumidores deben usar el `id` como
+referencia entre entidades; el código es el identificador legible que debe mostrarse
+junto al nombre en selectores y listados.
+
+### Resolución de relaciones para formularios
+
+Para crear cursos y asignaciones, los clientes deben obtener los registros reales y
+mostrar opciones legibles, conservando el `id` como valor enviado:
+
+- Asignaturas: recorrer `GET /api/academica/carreras`, luego los planes de cada carrera
+  y finalmente `GET /api/academica/planes/{planId}/asignaturas`. Mostrar
+  `codigo - nombre`; enviar `asignaturaId`.
+- Períodos: usar `GET /api/planificacion/periodos`; enviar `periodoId`.
+- Sedes: usar `GET /api/planificacion/sedes`; enviar `sedeId`.
+- Aulas: consultar `GET /api/planificacion/sedes/{sedeId}/aulas`, mostrar
+  `codigo - nombre` y enviar `aulaId`. En cursos, el aula debe pertenecer a la sede
+  seleccionada.
+
+`POST /api/planificacion/cursos` recibe `asignaturaId`, `periodoId`, `sedeId` y
+`aulaId`. `POST /api/planificacion/asignaciones` recibe `asignaturaId` y `aulaId`.
 
 ## Situación de los requerimientos del Portal de Docencia
 
@@ -52,7 +83,7 @@ El filtro `periodoId` es opcional. La respuesta incluye `sedeNombre` y `aulaNomb
 [
   {
     "id": 42,
-    "codigo": "DDA2-A",
+    "codigo": "DDA2-001",
     "asignaturaId": 15,
     "periodoId": 8,
     "sedeId": 2,
@@ -85,10 +116,10 @@ El curso incluye datos de asignatura y período de forma anidada, y los nombres 
 {
   "curso": {
     "id": 42,
-    "codigo": "DDA2-A",
+    "codigo": "DDA2-001",
     "asignatura": {
       "id": 15,
-      "codigo": "DDA2",
+      "codigo": "DDA2-002",
       "nombre": "Desarrollo de Aplicaciones II"
     },
     "periodo": {
@@ -139,7 +170,7 @@ El DTO de detalle refleja los datos que devuelve el endpoint. Los identificadore
 
 ```json
 {
-  "codigo": "DDA2-A",
+  "codigo": "DDA2-001",
   "asignaturaId": 15,
   "periodoId": 8,
   "sedeId": 2,

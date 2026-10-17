@@ -25,6 +25,10 @@ Los endpoints de este servicio se implementan bajo `/api/planificacion`,
 se configura por separado. Las comprobaciones de vida están en `GET /health/live`
 y `GET /health/ready`.
 
+Los códigos nuevos de carreras, planes, asignaturas y cursos usan el formato
+`ARQ-001` o `ARQ1-001` (`^[A-Z]{3}[0-9]?-[0-9]{3}$`). La API rechaza con HTTP 400
+los códigos que no respetan este contrato.
+
 Al crear un aula con `POST /api/planificacion/sedes/{id}/aulas`, se puede enviar
 `nombre` además de `codigo` y `capacidadMaxima`. Si se omite, se utiliza su código.
 Las sedes ya tienen nombre. La base existente no necesita migración para exponerlos
@@ -144,12 +148,9 @@ para testear la API:
 | POST / GET | `/api/usuarios` | Crear/listar usuarios administrativos |
 
 Salvo el login, todas las rutas requieren una sesión válida o autenticación HTTP Basic.
-Las operaciones de lectura (`GET`) bajo `/api/academica/**` y `/api/planificacion/**`
-(carreras, planes, asignaturas, correlatividades, sedes, aulas, agenda, períodos y turnos,
-incluyendo la descarga del PDF del plan) están disponibles tanto para `ADMINISTRATIVO` como
-para `USUARIO`. Cualquier escritura (`POST`/`PUT`/`DELETE`) en esas rutas, y el resto de la
-API (`/api/usuarios/**`, `/api/regularidad/**`), exige el permiso `ADMINISTRATIVO`; un usuario
-con permiso `USUARIO` recibirá HTTP 403 al intentarlo.
+Las operaciones bajo `/api/academica/**`, `/api/planificacion/**` y el resto de la API
+administrativa aceptan `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN`. Un usuario con
+permiso `USUARIO` recibe HTTP 403.
 
 ### Ejemplo de login
 
