@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Mapa interactivo de arquitectura, API y reglas de negocio de Gestión Académica.">
+  <title>Gestión Académica · Mapa de integración</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#inicio" aria-label="Ir al inicio">
+      <span class="brand-mark">GA</span>
+      <span><strong>Gestión Académica</strong><small>Mapa de integración · v1</small></span>
+    </a>
+    <nav aria-label="Navegación principal">
+      <a href="#arquitectura">Arquitectura</a>
+      <a href="#flujos">Flujos</a>
+      <a href="#endpoints">API</a>
+      <a href="#reglas">Reglas</a>
+      <a href="#integraciones">Integraciones</a>
+    </nav>
+    <button id="themeToggle" class="icon-button" type="button" aria-label="Cambiar tema" title="Cambiar tema">◐</button>
+  </header>
+
+  <main>
+    <section id="inicio" class="hero section-shell">
+      <div class="hero-copy reveal">
+        <p class="eyebrow">UNIVERSIDAD · SECRETARÍA ACADÉMICA</p>
+        <h1>Un mapa para entender <em>todo el módulo</em>.</h1>
+        <p class="hero-lead">Arquitectura actual, destino CORE, contratos HTTP, reglas de negocio y dependencias externas en una sola vista navegable.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#arquitectura">Explorar arquitectura <span>→</span></a>
+          <a class="button ghost" href="#endpoints">Buscar un endpoint</a>
+        </div>
+        <div class="scope-note"><span class="pulse"></span> Basado en el código fuente y contratos auditados el 17/10/2026</div>
+      </div>
+      <div class="hero-console reveal" aria-label="Resumen técnico">
+        <div class="console-head"><span></span><span></span><span></span><b>academic-service / overview</b></div>
+        <div class="console-body">
+          <div class="metric"><strong>39</strong><span>endpoints funcionales</span></div>
+          <div class="metric"><strong>7</strong><span>dominios funcionales</span></div>
+          <div class="metric"><strong>2</strong><span>integraciones objetivo</span></div>
+          <div class="status-line"><i class="ok"></i><span>Backend Spring Boot + PostgreSQL</span><b>ACTUAL</b></div>
+          <div class="status-line"><i class="warn"></i><span>Gateway y JWT de CORE</span><b>PENDIENTE</b></div>
+          <div class="status-line"><i class="warn"></i><span>Sincronización Backoffice</span><b>PENDIENTE</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="signal-strip" aria-label="Resumen de alcance">
+      <span><b>Fuente de verdad</b> PostgreSQL / Supabase</span>
+      <span><b>API actual</b> /api/**</span>
+      <span><b>Destino público</b> /api/v1/academic/**</span>
+      <span><b>Seguridad actual</b> JSESSIONID</span>
+    </section>
+
+    <section id="arquitectura" class="section-shell section-block">
+      <div class="section-heading reveal">
+        <div><p class="eyebrow">01 · ARQUITECTURA</p><h2>Dos estados, sin mezclar promesas con realidad</h2></div>
+        <p>Alterná entre lo implementado hoy y el flujo que exige CORE. Las líneas punteadas representan trabajo pendiente.</p>
+      </div>
+      <div class="segmented" role="group" aria-label="Estado de arquitectura">
+        <button class="active" data-architecture="current" type="button">Actual</button>
+        <button data-architecture="target" type="button">Objetivo CORE</button>
+      </div>
+      <div id="architectureCanvas" class="architecture-canvas" aria-live="polite"></div>
+      <div class="legend">
+        <span><i class="line solid"></i> Implementado</span>
+        <span><i class="line dashed"></i> Pendiente</span>
+        <span><i class="node external"></i> Sistema externo</span>
+      </div>
+    </section>
+
+    <section id="flujos" class="section-shell section-block">
+      <div class="section-heading reveal">
+        <div><p class="eyebrow">02 · FLUJOS</p><h2>Cómo se mueve el negocio</h2></div>
+        <p>Seleccioná un caso para recorrer sus decisiones, datos y efectos.</p>
+      </div>
+      <div class="flow-layout">
+        <div id="flowTabs" class="flow-tabs" role="tablist" aria-label="Flujos del módulo"></div>
+        <article id="flowDetail" class="flow-detail" aria-live="polite"></article>
+      </div>
+    </section>
+
+    <section id="endpoints" class="section-shell section-block api-section">
+      <div class="section-heading reveal">
+        <div><p class="eyebrow">03 · CONTRATO HTTP</p><h2>Explorador de endpoints</h2></div>
+        <p>La clasificación “público” significa sin autenticación. Las rutas administrativas actuales no son públicas a Internet.</p>
+      </div>
+      <div class="api-toolbar">
+        <label class="search-field"><span>⌕</span><input id="endpointSearch" type="search" placeholder="Buscar ruta, actividad o dominio…" autocomplete="off"></label>
+        <div id="methodFilters" class="filter-group" aria-label="Filtrar por método"></div>
+        <select id="accessFilter" aria-label="Filtrar por acceso">
+          <option value="all">Todo acceso</option>
+          <option value="public">Público sin auth</option>
+          <option value="protected">Administrativo</option>
+          <option value="docs">Documentación</option>
+        </select>
+      </div>
+      <div class="api-summary"><span id="endpointCount"></span><span>Seleccioná una fila para ver contrato y reglas asociadas.</span></div>
+      <div id="endpointList" class="endpoint-list"></div>
+    </section>
+
+    <section id="reglas" class="section-shell section-block">
+      <div class="section-heading reveal">
+        <div><p class="eyebrow">04 · REGLAS DE NEGOCIO</p><h2>Las invariantes que protege el módulo</h2></div>
+        <p>Estas reglas salen del código de servicios y validaciones, no de supuestos de interfaz.</p>
+      </div>
+      <div id="rulesGrid" class="rules-grid"></div>
+    </section>
+
+    <section id="integraciones" class="section-shell section-block">
+      <div class="section-heading reveal">
+        <div><p class="eyebrow">05 · INTEGRACIONES</p><h2>Fronteras, propietarios y decisiones abiertas</h2></div>
+        <p>Qué dato pertenece a cada sistema y qué falta acordar antes de conectar.</p>
+      </div>
+      <div class="integration-grid">
+        <article class="integration-card core-card reveal">
+          <div class="card-top"><span class="system-icon">C</span><span class="badge pending">Contrato objetivo</span></div>
+          <h3>CORE</h3>
+          <p>Gateway, identidad, JWT, correlación y publicación durable de eventos.</p>
+          <ul>
+            <li><b>Entrada pública:</b> <code>/api/v1/academic/*</code></li>
+            <li><b>Identidad:</b> UUID en <code>sub</code> / <code>X-User-Id</code></li>
+            <li><b>Auth:</b> Bearer JWT RS256; validar <code>iss</code>, <code>aud</code>, <code>exp</code></li>
+            <li><b>Pendiente:</b> nombre exacto del permiso administrativo académico</li>
+          </ul>
+        </article>
+        <article class="integration-card backoffice-card reveal">
+          <div class="card-top"><span class="system-icon">B</span><span class="badge pending">Preparado</span></div>
+          <h3>Backoffice</h3>
+          <p>Propietario de personas, sedes y ubicaciones institucionales.</p>
+          <ul>
+            <li><b>Claves externas:</b> <code>siteId</code> y <code>locationId</code> UUID</li>
+            <li><b>Claves locales:</b> <code>sedeId</code> y <code>aulaId</code> Long</li>
+            <li><b>Filtro:</b> sólo ubicaciones tipo <code>AULA</code></li>
+            <li><b>Pendiente:</b> confirmar ruta <code>/internal/v1</code> backend-a-backend</li>
+          </ul>
+        </article>
+        <article class="integration-card analytics-card reveal">
+          <div class="card-top"><span class="system-icon">A</span><span class="badge partial">Parcial</span></div>
+          <h3>Eventos y Analítica</h3>
+          <p>El backend emite resultados después del commit, pero el transporte aún no sigue el contrato CORE.</p>
+          <ul>
+            <li><b>Actual:</b> evento local <code>resultado.publicado</code></li>
+            <li><b>Estado:</b> Rabbit opcional, deshabilitado por defecto</li>
+            <li><b>Brecha:</b> envelope, eventType e idempotencia CORE</li>
+            <li><b>Regla:</b> no declarar exchange, queue ni binding desde el módulo</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="decision-panel reveal">
+        <div><p class="eyebrow">DECISIONES ABIERTAS</p><h3>Dos respuestas externas antes de integrar</h3></div>
+        <ol>
+          <li><span>01</span><div><strong>Permiso académico de CORE</strong><p>Confirmar el string exacto en <code>roles</code> o <code>permissions</code> para operaciones administrativas.</p></div></li>
+          <li><span>02</span><div><strong>Ruta interna de Backoffice</strong><p>Confirmar el equivalente `/internal/v1` para sites y locations usando token de servicio.</p></div></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section-shell section-block handoff">
+      <div>
+        <p class="eyebrow">FUENTES AUDITADAS</p>
+        <h2>El mapa apunta al código, no lo reemplaza.</h2>
+        <p>Para detalles de payloads y ejemplos completos consultá el contrato Markdown, el README y la documentación de Backoffice.</p>
+      </div>
+      <div class="source-links">
+        <a href="../CONTRATO_PORTALES_ALUMNOS_Y_DOCENCIA.md">Contrato API <span>↗</span></a>
+        <a href="../INTEGRACION_BACKOFFICE.md">Integración Backoffice <span>↗</span></a>
+        <a href="../../README.md">README backend <span>↗</span></a>
+        <a href="../../../../Frontend/README.md">README frontend <span>↗</span></a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Gestión Académica · UADEnet</span>
+    <span>Documento técnico interactivo · 2026</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

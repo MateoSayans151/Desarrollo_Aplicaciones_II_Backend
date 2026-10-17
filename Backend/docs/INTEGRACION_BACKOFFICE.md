@@ -2,6 +2,13 @@
 
 La conexión todavía no está activa. application.properties contiene las propiedades comentadas para configurar la URL base y las rutas cuando Backoffice publique un entorno accesible.
 
+> **Decisión de contrato pendiente:** Backoffice informó la ruta pública
+> `/api/v1/backoffice/locations`, pero el contrato de CORE establece que una llamada
+> backend-a-backend debe usar token de servicio y rutas `/internal/v1/*`. Antes de
+> implementar el cliente hay que confirmar con CORE/Backoffice la ruta interna
+> equivalente. No se debe reutilizar el token del usuario ni improvisar una llamada
+> directa fuera del gateway.
+
 ## Formato de Backoffice
 
 Sedes:

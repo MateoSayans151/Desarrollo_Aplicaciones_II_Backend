@@ -9,8 +9,14 @@ y `aulaId`. Los nombres se leen de las tablas `sedes` y `aulas`; no se agregan
 columnas a `cursos`.
 
 La autenticación activa del backend usa usuarios locales y sesión HTTP. La validación
-de JWT emitidos por Core todavía no está implementada. La API de notas usa el nombre
+de JWT emitidos por CORE todavía no está implementada. La API de notas usa el nombre
 de campo compartido `alumnoId` para identificar al alumno en las inscripciones.
+
+El inventario exhaustivo, las reglas de negocio y las diferencias entre el estado
+actual y el contrato objetivo de CORE están en
+[`docs/CONTRATO_PORTALES_ALUMNOS_Y_DOCENCIA.md`](docs/CONTRATO_PORTALES_ALUMNOS_Y_DOCENCIA.md).
+El recorrido visual está en el
+[`mapa interactivo de arquitectura`](docs/arquitectura-interactiva/index.html).
 
 Variables previstas para esa integración:
 
@@ -99,8 +105,9 @@ Con la aplicación en ejecución, se puede abrir:
 
 `http://localhost:8080/swagger-ui.html`
 
-Se puede iniciar sesión mediante `POST /api/usuarios/login`. También es posible presionar
-**Authorize** e ingresar el usuario y la clave indicados arriba para utilizar HTTP Basic.
+Se puede iniciar sesión mediante `POST /api/auth/login`. La sesión queda asociada a la
+cookie `JSESSIONID`; HTTP Basic y la validación del Bearer JWT anunciado en OpenAPI no
+están activos todavía.
 La especificación OpenAPI en formato JSON está disponible en `http://localhost:8080/v3/api-docs`.
 
 Estas credenciales son únicamente para desarrollo. En un entorno real se deben definir
@@ -142,12 +149,11 @@ para testear la API:
 | PUT | `/api/planificacion/cursos/{id}/horario` | Actualizar día, aula y horas del curso |
 | POST / GET | `/api/planificacion/turnos-examen` | Crear/listar turnos |
 | POST | `/api/regularidad/validar` | Validar habilitación a final |
-| POST | `/api/usuarios/login` | Iniciar sesión |
-| POST | `/api/usuarios/logout` | Cerrar sesión |
-| GET | `/api/usuarios/actual` | Consultar usuario autenticado |
-| POST / GET | `/api/usuarios` | Crear/listar usuarios administrativos |
+| POST | `/api/auth/login` | Iniciar sesión local |
+| POST | `/api/auth/logout` | Cerrar sesión local |
+| GET | `/api/auth/me` | Consultar usuario autenticado |
 
-Salvo el login, todas las rutas requieren una sesión válida o autenticación HTTP Basic.
+Salvo health, Swagger y login, todas las rutas requieren una sesión local válida.
 Las operaciones bajo `/api/academica/**`, `/api/planificacion/**` y el resto de la API
 administrativa aceptan `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN`. Un usuario con
 permiso `USUARIO` recibe HTTP 403.

@@ -22,6 +22,17 @@ import java.util.List;
 
 @Configuration
 public class ConfiguracionSeguridad {
+    /**
+     * La sesión local emite ROLE_ADMINISTRATIVO, mientras que CORE puede enviar
+     * el nombre del rol con o sin el prefijo ROLE_. Se aceptan ambas variantes
+     * durante la transición de autenticación.
+     */
+    private static final String[] AUTORIDADES_ADMINISTRATIVAS = {
+            "ROLE_ADMINISTRATIVO", "ADMINISTRATIVO",
+            "ROLE_ADMINISTRADOR", "ADMINISTRADOR",
+            "ROLE_ACADEMIC_ADMIN", "ACADEMIC_ADMIN"
+    };
+
     @Bean
     SecurityFilterChain filtros(HttpSecurity http, CorsConfigurationSource origenesCors) throws Exception {
         return http
@@ -31,9 +42,8 @@ public class ConfiguracionSeguridad {
                         .requestMatchers("/health/live", "/health/ready", "/swagger-ui/**", "/swagger-ui.html",
                                 "/v3/api-docs/**", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/academica/**", "/api/planificacion/**")
-                                .hasAnyAuthority("ROLE_ADMINISTRATIVO", "ROLE_ACADEMIC_ADMIN")
-                        .requestMatchers("/api/**").hasAnyAuthority(
-                                "ROLE_ADMINISTRATIVO", "ROLE_ACADEMIC_ADMIN")
+                                .hasAnyAuthority(AUTORIDADES_ADMINISTRATIVAS)
+                        .requestMatchers("/api/**").hasAnyAuthority(AUTORIDADES_ADMINISTRATIVAS)
                         .anyRequest().denyAll())
                 .build();
     }
