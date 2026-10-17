@@ -2,6 +2,7 @@ package ar.edu.universidad.gestionacademica.Configuracion;
 
 import ar.edu.universidad.gestionacademica.Excepciones.RecursoNoEncontradoException;
 import ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -40,5 +41,11 @@ public class ManejadorErrores {
         }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ErrorRespuesta("Hay datos invalidos en la solicitud", errores));
+    }
+
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<ErrorRespuesta> manejarAccesoDatos(DataAccessException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorRespuesta("No se pudieron leer los datos por una inconsistencia de la base", null));
     }
 }

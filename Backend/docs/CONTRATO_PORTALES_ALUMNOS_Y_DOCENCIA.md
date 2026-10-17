@@ -6,7 +6,215 @@ Este documento describe los endpoints y modelos que existen actualmente en Gesti
 
 Las rutas siguientes son las que implementa directamente este servicio. El gateway institucional puede publicar un prefijo distinto.
 
-El Portal de Docencia consume estas rutas con `ROLE_ADMINISTRATIVO` (o `ROLE_ACADEMIC_ADMIN`) y puede luego presentar la información al alumno. No se exponen endpoints públicos ni de autoservicio directamente desde este servicio.
+El Portal de Docencia consume estas rutas con `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN` y puede luego presentar la información al alumno. No se exponen endpoints públicos ni de autoservicio directamente desde este servicio.
+
+## Estado real de la integración
+
+Este contrato distingue deliberadamente entre la API que funciona hoy y la integración
+objetivo con CORE:
+
+| Capa | Estado | Contrato vigente |
+| --- | --- | --- |
+| API local de Gestión Académica | Implementada | Rutas `/api/**`, autenticación local por sesión `JSESSIONID` y roles `ROLE_ADMINISTRATIVO`/`ROLE_ACADEMIC_ADMIN`. |
+| Gateway de CORE | Pendiente | CORE publicará el módulo bajo `/api/v1/academic/*` y reescribirá a `/api/v1/*`. Los controladores todavía no exponen ese prefijo. |
+| JWT de CORE | Pendiente | Falta validar RS256, `iss`, `aud` y `exp`, y mapear `roles`/`permissions`. La configuración OpenAPI ya anuncia Bearer, pero la seguridad de ejecución todavía no lo procesa. |
+| Headers `X-User-*` | Pendiente | Falta consumir `X-User-Id`, `X-User-Roles`, `X-User-Permissions` y propagar `X-Correlation-Id`. |
+| Endpoints privados `/internal/v1/**` | No implementados | El módulo actualmente no expone endpoints backend-a-backend. |
+| Backoffice | Preparado, no conectado | Existen referencias `backofficeSiteId`/`backofficeLocationId`; falta el cliente HTTP y la sincronización paginada. |
+| Eventos CORE | Pendiente de adaptar | El publicador Rabbit opcional actual usa un envelope y topología propios. CORE exige publicar mediante su contrato, no declarar exchanges/colas desde este módulo. |
+| Errores CORE | Pendiente de adaptar | Hoy se responde `{ mensaje, errores? }`; CORE exige `application/problem+json` con `code` y `correlationId`. |
+
+Por lo tanto, las rutas listadas abajo son rutas internas actuales del servicio. No deben
+exponerse directamente a Internet. La URL pública definitiva debe pasar por el gateway.
+
+## Inventario completo de endpoints actuales
+
+### Sin autenticación
+
+| Método | Ruta | Resultado |
+| --- | --- | --- |
+| `GET` | `/health/live` | Liveness del proceso. |
+| `GET` | `/health/ready` | Readiness del servicio. Actualmente confirma el estado de la aplicación, no ejecuta una prueba explícita de DB. |
+| `POST` | `/api/auth/login` | Autentica email/contraseña local, crea sesión y devuelve el usuario sin contraseña. |
+| `GET` | `/swagger-ui.html` | Interfaz Swagger. |
+| `GET` | `/v3/api-docs` | Documento OpenAPI generado. |
+
+### Autenticación local
+
+| Método | Ruta | Actividad |
+| --- | --- | --- |
+| `GET` | `/api/auth/me` | Devuelve el usuario de la sesión actual. |
+| `POST` | `/api/auth/logout` | Invalida la sesión actual. |
+
+No existen controladores `/api/usuarios`, ni endpoints para crear o listar usuarios.
+`UsuarioServicio` contiene esos métodos, pero no están expuestos por HTTP.
+
+### Estructura académica
+
+| Método | Ruta | Actividad |
+| --- | --- | --- |
+| `POST` | `/api/academica/carreras` | Crear carrera. |
+| `GET` | `/api/academica/carreras` | Listar carreras. |
+| `PUT` | `/api/academica/carreras/{id}` | Actualizar carrera. |
+| `DELETE` | `/api/academica/carreras/{id}` | Desactivación lógica: cambia el estado a `INACTIVA`. |
+| `POST` | `/api/academica/carreras/{carreraId}/planes` | Crear plan de estudio. |
+| `GET` | `/api/academica/carreras/{carreraId}/planes` | Listar planes de una carrera. |
+| `GET` | `/api/academica/planes/{planId}/pdf` | Descargar PDF con asignaturas y correlatividades del plan. |
+| `POST` | `/api/academica/planes/{planId}/asignaturas` | Crear asignatura en un plan. |
+| `GET` | `/api/academica/planes/{planId}/asignaturas` | Listar asignaturas de un plan. |
+| `POST` | `/api/academica/asignaturas/{asignaturaId}/correlatividades` | Agregar correlatividad. |
+| `GET` | `/api/academica/asignaturas/{asignaturaId}/correlatividades` | Listar correlatividades. |
+
+### Espacios y calendario académico
+
+| Método | Ruta | Actividad |
+| --- | --- | --- |
+| `POST` | `/api/planificacion/sedes` | Crear sede local. |
+| `GET` | `/api/planificacion/sedes` | Listar sedes. |
+| `POST` | `/api/planificacion/sedes/{sedeId}/aulas` | Crear aula local asociada a una sede. |
+| `GET` | `/api/planificacion/sedes/{sedeId}/aulas` | Listar aulas de la sede. |
+| `POST` | `/api/planificacion/asignaciones` | Reservar un aula para una asignatura en una fecha y horario. |
+| `GET` | `/api/planificacion/aulas/{aulaId}/agenda?fecha=AAAA-MM-DD` | Consultar agenda diaria del aula. |
+| `POST` | `/api/planificacion/periodos` | Crear período académico y ventana de inscripción. |
+| `GET` | `/api/planificacion/periodos` | Listar períodos. |
+| `POST` | `/api/planificacion/turnos-examen` | Crear turno de examen y ventana de inscripción. |
+| `GET` | `/api/planificacion/turnos-examen` | Listar turnos de examen. |
+
+### Cursos, docentes, inscripciones y notas
+
+| Método | Ruta | Actividad |
+| --- | --- | --- |
+| `POST` | `/api/planificacion/cursos` | Crear curso/comisión. |
+| `GET` | `/api/planificacion/cursos?periodoId={id}` | Listar cursos; filtro de período opcional. |
+| `GET` | `/api/planificacion/cursos/{cursoId}` | Obtener curso con docentes e inscripciones. |
+| `PUT` | `/api/planificacion/cursos/{cursoId}/estado` | Cambiar estado del curso. |
+| `PUT` | `/api/planificacion/cursos/{cursoId}/horario` | Cambiar día, aula y rango horario. |
+| `POST` | `/api/planificacion/cursos/{cursoId}/docentes` | Asignar docente externo y rol. |
+| `POST` | `/api/planificacion/cursos/{cursoId}/inscripciones` | Inscribir alumno. |
+| `PUT` | `/api/planificacion/cursos/{cursoId}/inscripciones/{alumnoId}` | Actualizar estado o resultado de inscripción. |
+| `GET` | `/api/planificacion/alumnos/{alumnoId}/inscripciones?periodoId={id}` | Listar inscripciones de un alumno. |
+| `GET` | `/api/planificacion/cursos/{cursoId}/notas` | Listar notas del curso. |
+| `GET` | `/api/planificacion/cursos/{cursoId}/notas/{alumnoId}` | Consultar nota de un alumno. |
+| `PUT` | `/api/planificacion/cursos/{cursoId}/notas/{alumnoId}` | Cargar o corregir nota final. |
+
+### Regularidad
+
+| Método | Ruta | Actividad |
+| --- | --- | --- |
+| `POST` | `/api/regularidad/validar` | Evalúa asistencia y promedio contra mínimos enviados por el cliente. No consulta cursadas persistidas. |
+
+## Catálogo de payloads de escritura
+
+Los nombres siguientes son los campos JSON exactos aceptados hoy. Las fechas usan
+`AAAA-MM-DD`, las horas `HH:mm:ss` (Spring también acepta `HH:mm`) y los identificadores
+locales son números `Long`. `alumnoId` y `docenteId` son strings externos; en la
+integración objetivo deberán transportar el UUID de CORE como texto.
+
+| Actividad | Body JSON | Respuesta exitosa |
+| --- | --- | --- |
+| Login local | `{ "email": "...", "password": "..." }` | `200`, usuario autenticado y cookie `JSESSIONID`. |
+| Crear/editar carrera | `{ "codigo", "nombre", "facultad", "duracion", "titulo" }` | `201` al crear, `200` al editar; carrera con `id` y `estado`. |
+| Crear plan | `{ "codigo", "nombre", "vigenciaDesde", "cantidadAsignaturas" }` | `201`; plan con `id`, `estado` y `carreraId`. |
+| Crear asignatura | `{ "codigo", "nombre", "anio", "creditos", "cargaHoraria" }` | `201`; asignatura con `id`, `estado` y `planId`. |
+| Crear correlatividad | `{ "correlativaId": 1, "tipo": "REGULAR|APROBADA" }` | `201`; relación creada. |
+| Crear sede | `{ "nombre", "direccion" }` | `201`; sede con `id`, `backofficeSiteId` y `estado`. |
+| Crear aula | `{ "codigo", "capacidadMaxima", "nombre"? }` | `201`; aula tipo `AULA`; si falta `nombre`, usa el código. |
+| Asignar aula | `{ "aulaId", "asignaturaId", "fecha", "horaInicio", "horaFin", "cantidadEstudiantes" }` | `201`; asignación persistida. |
+| Crear período | `{ "anio", "numero", "fechaInicio", "fechaFin", "inscripcionDesde", "inscripcionHasta" }` | `201`; período creado. `numero` admite 1 o 2. |
+| Crear turno de examen | `{ "nombre", "fechaInicio", "fechaFin", "inscripcionDesde", "inscripcionHasta" }` | `201`; turno creado. |
+| Crear curso | `{ "codigo", "asignaturaId", "periodoId", "sedeId", "modalidad", "cupoMaximo", "fechaInicio", "fechaFin", "turno", "horaInicio", "horaFin", "diaSemana", "aulaId" }` | `201`; curso con nombres de sede/aula e `inscriptosActivos`. |
+| Cambiar estado de curso | `{ "estado": "PLANIFICADO|EN_CURSO|FINALIZADO|CANCELADO" }` | `200`; curso actualizado. |
+| Cambiar horario de curso | `{ "aulaId", "diaSemana", "horaInicio", "horaFin" }` | `200`; curso actualizado después de revalidar aula y solapamiento. |
+| Asignar docente | `{ "docenteId", "rol": "TITULAR|ADJUNTO|AUXILIAR" }` | `201`; vínculo docente-curso. |
+| Inscribir alumno | `{ "alumnoId" }` | `201`; inscripción en estado `INSCRIPTO`. |
+| Cambiar inscripción | `{ "estado", "notaFinal"?, "fechaResultado"? }` | `200`; inscripción actualizada. Los campos opcionales pasan a ser obligatorios para un estado final. |
+| Cargar nota final | `{ "notaFinal", "estado": "APROBADO|DESAPROBADO", "fechaResultado"? }` | `200`; nota publicada. Si falta fecha se usa la fecha actual. |
+| Validar regularidad | `{ "asistencia", "promedio", "asistenciaMinima", "promedioMinimo" }` | `200`; `{ "regular", "habilitadoParaFinal", "motivos" }`. |
+
+Las consultas devuelven listas de los DTO de respuesta anteriores. El detalle de curso
+devuelve `{ "curso", "docentes", "inscripciones" }`; el listado de inscripciones de un
+alumno anida un resumen completo del curso. La descarga del plan responde
+`application/pdf`; el resto de los endpoints de negocio usa JSON.
+
+Salvo health, Swagger y login, la configuración actual exige
+`ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN` para todas las rutas anteriores.
+
+## Reglas de negocio consolidadas
+
+- Carreras: el código debe ser único sin distinguir mayúsculas/minúsculas; eliminar es
+  una desactivación lógica.
+- Códigos nuevos de carrera, plan, asignatura y curso: formato `ARQ-001` o
+  `ARQ1-001`.
+- Correlatividades: una asignatura no puede ser correlativa de sí misma y ambas deben
+  pertenecer al mismo plan.
+- Aulas: sólo ubicaciones de tipo `AULA` pueden asignarse; la cantidad de estudiantes o
+  el cupo del curso no puede superar su capacidad.
+- Ocupación: no se permiten horarios superpuestos para la misma aula. Las asignaciones
+  puntuales comparan fecha y hora; los cursos comparan día de semana y período.
+- Cursos: la fecha final debe ser posterior a la inicial y ambas deben caer dentro del
+  período académico; la hora final debe ser posterior a la inicial; el aula debe
+  pertenecer a la sede elegida.
+- Inscripciones: no se aceptan en cursos cancelados, fuera de la ventana del período,
+  duplicadas, por encima del cupo ni sin cumplir correlatividades.
+- Correlatividad `REGULAR`: admite antecedente `REGULAR` o `APROBADO`.
+  Correlatividad `APROBADA`: exige antecedente `APROBADO`.
+- Resultados: una nota está entre 0 y 10. Los estados finales son `APROBADO` o
+  `DESAPROBADO`; un resultado final necesita nota y fecha. No se cargan notas a una
+  inscripción en `BAJA`.
+- Períodos y turnos: todo rango termina después de comenzar. La inscripción debe cerrar
+  antes o el mismo día del inicio del período, y antes del inicio del turno de examen.
+- Regularidad: queda regular y habilitado para final únicamente cuando asistencia y
+  promedio alcanzan los mínimos recibidos.
+
+Enums expuestos: `EstadoAcademico = ACTIVA | BORRADOR | INACTIVA`,
+`EstadoCurso = PLANIFICADO | EN_CURSO | FINALIZADO | CANCELADO`,
+`EstadoInscripcionCurso = INSCRIPTO | CURSANDO | BAJA | REGULAR | LIBRE | APROBADO | DESAPROBADO`,
+`ModalidadCurso = PRESENCIAL | VIRTUAL | HIBRIDA`,
+`TurnoCurso = MAÑANA | TARDE | NOCHE`, `RolDocenteCurso = TITULAR | ADJUNTO | AUXILIAR`
+y `TipoUbicacion = AULA | AUDITORIO | COMEDOR | BIBLIOTECA`.
+
+## Errores actuales
+
+| Caso | HTTP | Body actual |
+| --- | --- | --- |
+| Recurso inexistente | `404` | `{ "mensaje": "...", "errores": null }` |
+| Regla de negocio | `400` | `{ "mensaje": "...", "errores": null }` |
+| Validación de DTO | `400` | `{ "mensaje": "Hay datos invalidos en la solicitud", "errores": { "campo": "detalle" } }` |
+| Sin sesión/token | `401` | Respuesta de Spring Security. |
+| Sin rol requerido | `403` | Respuesta de Spring Security. |
+
+Esta forma aún debe migrarse al `application/problem+json` requerido por CORE.
+
+## Formato obligatorio de códigos
+
+Los códigos nuevos de carreras, planes de estudio, asignaturas y cursos deben cumplir
+la expresión regular `^[A-Z]{3}[0-9]?-[0-9]{3}$`. Se aceptan exactamente estos dos
+formatos:
+
+- Tres letras mayúsculas, guion y tres dígitos: `ARQ-001`.
+- Tres letras mayúsculas, un dígito, guion y tres dígitos: `ARQ1-001`.
+
+Los `POST` correspondientes y la actualización de carreras responden HTTP 400 cuando
+el código no respeta el formato. Los módulos consumidores deben usar el `id` como
+referencia entre entidades; el código es el identificador legible que debe mostrarse
+junto al nombre en selectores y listados.
+
+### Resolución de relaciones para formularios
+
+Para crear cursos y asignaciones, los clientes deben obtener los registros reales y
+mostrar opciones legibles, conservando el `id` como valor enviado:
+
+- Asignaturas: recorrer `GET /api/academica/carreras`, luego los planes de cada carrera
+  y finalmente `GET /api/academica/planes/{planId}/asignaturas`. Mostrar
+  `codigo - nombre`; enviar `asignaturaId`.
+- Períodos: usar `GET /api/planificacion/periodos`; enviar `periodoId`.
+- Sedes: usar `GET /api/planificacion/sedes`; enviar `sedeId`.
+- Aulas: consultar `GET /api/planificacion/sedes/{sedeId}/aulas`, mostrar
+  `codigo - nombre` y enviar `aulaId`. En cursos, el aula debe pertenecer a la sede
+  seleccionada.
+
+`POST /api/planificacion/cursos` recibe `asignaturaId`, `periodoId`, `sedeId` y
+`aulaId`. `POST /api/planificacion/asignaciones` recibe `asignaturaId` y `aulaId`.
 
 ## Situación de los requerimientos del Portal de Docencia
 
@@ -52,7 +260,7 @@ El filtro `periodoId` es opcional. La respuesta incluye `sedeNombre` y `aulaNomb
 [
   {
     "id": 42,
-    "codigo": "DDA2-A",
+    "codigo": "DDA2-001",
     "asignaturaId": 15,
     "periodoId": 8,
     "sedeId": 2,
@@ -85,10 +293,10 @@ El curso incluye datos de asignatura y período de forma anidada, y los nombres 
 {
   "curso": {
     "id": 42,
-    "codigo": "DDA2-A",
+    "codigo": "DDA2-001",
     "asignatura": {
       "id": 15,
-      "codigo": "DDA2",
+      "codigo": "DDA2-002",
       "nombre": "Desarrollo de Aplicaciones II"
     },
     "periodo": {
@@ -139,7 +347,7 @@ El DTO de detalle refleja los datos que devuelve el endpoint. Los identificadore
 
 ```json
 {
-  "codigo": "DDA2-A",
+  "codigo": "DDA2-001",
   "asignaturaId": 15,
   "periodoId": 8,
   "sedeId": 2,
