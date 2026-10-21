@@ -74,7 +74,9 @@ No existen controladores `/api/usuarios`, ni endpoints para crear o listar usuar
 | `POST` | `/api/planificacion/sedes/{sedeId}/aulas` | Crear aula local asociada a una sede. |
 | `GET` | `/api/planificacion/sedes/{sedeId}/aulas` | Listar aulas de la sede. |
 | `POST` | `/api/planificacion/asignaciones` | Reservar un aula para una asignatura en una fecha y horario. |
+| `GET` | `/api/planificacion/asignaciones` | Listar asignaciones registradas, ordenadas por fecha y hora. |
 | `GET` | `/api/planificacion/aulas/{aulaId}/agenda?fecha=AAAA-MM-DD` | Consultar agenda diaria del aula. |
+| `GET` | `/api/planificacion/asignaturas/{asignaturaId}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar horarios ocupados de la asignatura entre dos fechas inclusivas. |
 | `POST` | `/api/planificacion/periodos` | Crear período académico y ventana de inscripción. |
 | `GET` | `/api/planificacion/periodos` | Listar períodos. |
 | `POST` | `/api/planificacion/turnos-examen` | Crear turno de examen y ventana de inscripción. |

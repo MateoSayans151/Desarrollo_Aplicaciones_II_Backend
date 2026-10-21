@@ -64,6 +64,21 @@ public class PlanificacionServicio {
     public List<AsignacionRespuestaDto> agendaAula(Long aulaId, LocalDate fecha) {
         return asignaciones.findByAulaIdAndFechaOrderByHoraInicio(aulaId, fecha).stream().map(this::asignacion).toList();
     }
+    @Transactional(readOnly = true)
+    public List<AsignacionRespuestaDto> listarAsignaciones() {
+        return asignaciones.findAllByOrderByFechaAscHoraInicioAsc().stream().map(this::asignacion).toList();
+    }
+    @Transactional(readOnly = true)
+    public List<AsignacionRespuestaDto> agendaAsignatura(Long asignaturaId, LocalDate desde, LocalDate hasta) {
+        if (!asignaturas.existsById(asignaturaId)) {
+            throw new RecursoNoEncontradoException("Asignatura no encontrada");
+        }
+        if (hasta.isBefore(desde)) {
+            throw new ReglaNegocioException("La fecha de fin debe ser igual o posterior a la de inicio");
+        }
+        return asignaciones.findByAsignaturaIdAndFechaBetweenOrderByFechaAscHoraInicioAsc(
+                asignaturaId, desde, hasta).stream().map(this::asignacion).toList();
+    }
     public PeriodoRespuestaDto crearPeriodo(CrearPeriodoDto dto) {
         validarRango(dto.fechaInicio(), dto.fechaFin(), "cuatrimestre");
         validarRango(dto.inscripcionDesde(), dto.inscripcionHasta(), "inscripcion");

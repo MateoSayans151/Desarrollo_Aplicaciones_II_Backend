@@ -31,6 +31,13 @@ public class PlanificacionController {
 
     @PostMapping("/asignaciones") @ResponseStatus(HttpStatus.CREATED)
     public AsignacionRespuestaDto asignar(@Valid @RequestBody CrearAsignacionDto dto) { return servicio.asignarAula(dto); }
+    @GetMapping("/asignaciones")
+    public List<AsignacionRespuestaDto> asignaciones() { return servicio.listarAsignaciones(); }
+    @GetMapping("/asignaturas/{asignaturaId}/agenda")
+    public List<AsignacionRespuestaDto> agendaAsignatura(@PathVariable Long asignaturaId,
+            @RequestParam LocalDate desde, @RequestParam LocalDate hasta) {
+        return servicio.agendaAsignatura(asignaturaId, desde, hasta);
+    }
     @GetMapping("/aulas/{aulaId}/agenda")
     public List<AsignacionRespuestaDto> agenda(@PathVariable Long aulaId, @RequestParam LocalDate fecha) {
         return servicio.agendaAula(aulaId, fecha);

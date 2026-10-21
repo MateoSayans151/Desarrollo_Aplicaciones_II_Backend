@@ -1,22 +1,31 @@
 package ar.edu.universidad.gestionacademica.BusinessLogic;
 
 import ar.edu.universidad.gestionacademica.Entidades.Aula;
+import ar.edu.universidad.gestionacademica.Entidades.AsignacionAula;
+import ar.edu.universidad.gestionacademica.Entidades.Asignatura;
 import ar.edu.universidad.gestionacademica.Entidades.Sede;
+import ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException;
 import ar.edu.universidad.gestionacademica.Modelos.PlanificacionDto;
 import ar.edu.universidad.gestionacademica.Repositorios.*;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
+import java.util.List;
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class PlanificacionServicioTest {
     private final SedeRepositorio sedes = mock(SedeRepositorio.class);
     private final AulaRepositorio aulas = mock(AulaRepositorio.class);
+    private final AsignaturaRepositorio asignaturas = mock(AsignaturaRepositorio.class);
+    private final AsignacionAulaRepositorio asignaciones = mock(AsignacionAulaRepositorio.class);
     private final PlanificacionServicio servicio = new PlanificacionServicio(sedes, aulas,
-            mock(AsignaturaRepositorio.class), mock(AsignacionAulaRepositorio.class),
+            asignaturas, asignaciones,
             mock(PeriodoAcademicoRepositorio.class), mock(TurnoExamenRepositorio.class));
 
     @Test
@@ -51,5 +60,37 @@ class PlanificacionServicioTest {
         var aula = servicio.crearAula(2L, new PlanificacionDto.CrearAulaDto("A-4", 45, null));
 
         assertThat(aula.nombre()).isEqualTo("A-4");
+    }
+
+    @Test
+    void listaAsignacionesYAgendaDeUnaAsignatura() {
+        var aula = Aula.builder().id(4L).build();
+        var asignatura = Asignatura.builder().id(8L).build();
+        var fecha = LocalDate.of(2026, 10, 21);
+        var asignacion = AsignacionAula.builder().id(12L).aula(aula).asignatura(asignatura)
+                .fecha(fecha).horaInicio(LocalTime.of(9, 0)).horaFin(LocalTime.of(11, 0))
+                .cantidadEstudiantes(30).build();
+        when(asignaciones.findAllByOrderByFechaAscHoraInicioAsc()).thenReturn(List.of(asignacion));
+        when(asignaturas.existsById(8L)).thenReturn(true);
+        when(asignaciones.findByAsignaturaIdAndFechaBetweenOrderByFechaAscHoraInicioAsc(
+                8L, fecha, fecha.plusDays(6))).thenReturn(List.of(asignacion));
+
+        assertThat(servicio.listarAsignaciones()).singleElement().satisfies(item -> {
+            assertThat(item.aulaId()).isEqualTo(4L);
+            assertThat(item.asignaturaId()).isEqualTo(8L);
+            assertThat(item.fecha()).isEqualTo(fecha);
+        });
+        assertThat(servicio.agendaAsignatura(8L, fecha, fecha.plusDays(6)))
+                .extracting(PlanificacionDto.AsignacionRespuestaDto::id).containsExactly(12L);
+    }
+
+    @Test
+    void rechazaRangoInvertidoEnAgenda() {
+        when(asignaturas.existsById(8L)).thenReturn(true);
+        var fecha = LocalDate.of(2026, 10, 21);
+
+        assertThatThrownBy(() -> servicio.agendaAsignatura(8L, fecha.plusDays(1), fecha))
+                .isInstanceOf(ReglaNegocioException.class);
+        verifyNoInteractions(asignaciones);
     }
 }
