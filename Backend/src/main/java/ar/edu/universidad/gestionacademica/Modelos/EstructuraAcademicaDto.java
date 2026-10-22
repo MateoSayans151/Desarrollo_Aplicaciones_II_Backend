@@ -14,8 +14,7 @@ public final class EstructuraAcademicaDto {
                                   @Pattern(regexp = "^[A-Z]{3}[0-9]?-[0-9]{3}$",
                                            message = "debe tener el formato ARQ-001 o ARQ1-001")
                                   String codigo, @NotBlank String nombre,
-                                  @NotBlank String facultad, @NotBlank String duracion,
-                                  @NotBlank String titulo) { }
+                                  @NotBlank String facultad, @NotBlank String titulo) { }
     public record CarreraRespuestaDto(Long id, String codigo, String nombre, String facultad,
                                       String duracion, String titulo, EstadoAcademico estado) { }
 

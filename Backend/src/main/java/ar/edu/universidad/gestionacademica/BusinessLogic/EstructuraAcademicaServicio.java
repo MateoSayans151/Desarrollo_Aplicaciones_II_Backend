@@ -25,7 +25,7 @@ public class EstructuraAcademicaServicio {
             throw new ReglaNegocioException("Ya existe una carrera con el codigo indicado");
         }
         Carrera entidad = Carrera.builder().codigo(dto.codigo()).nombre(dto.nombre())
-                .facultad(dto.facultad()).duracion(dto.duracion()).titulo(dto.titulo()).build();
+                .facultad(dto.facultad()).titulo(dto.titulo()).build();
         return carrera(carreras.save(entidad));
     }
 
@@ -39,7 +39,6 @@ public class EstructuraAcademicaServicio {
         entidad.setCodigo(dto.codigo());
         entidad.setNombre(dto.nombre());
         entidad.setFacultad(dto.facultad());
-        entidad.setDuracion(dto.duracion());
         entidad.setTitulo(dto.titulo());
         return carrera(entidad);
     }
@@ -107,7 +106,17 @@ public class EstructuraAcademicaServicio {
     }
     private CarreraRespuestaDto carrera(Carrera c) {
         return new CarreraRespuestaDto(c.getId(), c.getCodigo(), c.getNombre(), c.getFacultad(),
-                c.getDuracion(), c.getTitulo(), c.getEstado());
+                calcularDuracion(asignaturas.countByPlan_Carrera_Id(c.getId())), c.getTitulo(), c.getEstado());
+    }
+    private String calcularDuracion(long cantidadAsignaturas) {
+        long semestres = (cantidadAsignaturas + 4) / 5;
+        if (semestres == 0) return "0 años";
+        if (semestres % 2 == 0) {
+            long anios = semestres / 2;
+            return anios + (anios == 1 ? " año" : " años");
+        }
+        long aniosCompletos = semestres / 2;
+        return aniosCompletos + ",5 años";
     }
     private PlanRespuestaDto plan(PlanEstudio p) {
         return new PlanRespuestaDto(p.getId(), p.getCodigo(), p.getNombre(), p.getVigenciaDesde(),

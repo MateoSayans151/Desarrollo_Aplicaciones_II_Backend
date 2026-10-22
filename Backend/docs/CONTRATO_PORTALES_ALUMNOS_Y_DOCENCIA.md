@@ -103,7 +103,7 @@ No existen controladores `/api/usuarios`, ni endpoints para crear o listar usuar
 
 | Método | Ruta | Actividad |
 | --- | --- | --- |
-| `POST` | `/api/regularidad/validar` | Evalúa asistencia y promedio contra mínimos enviados por el cliente. No consulta cursadas persistidas. |
+| `POST` | `/api/regularidad/validar` | Evalúa asistencia y promedio para un alumno y curso persistidos; exige inscripción activa y correlativas aprobadas para habilitar el final. |
 
 ## Catálogo de payloads de escritura
 
@@ -115,7 +115,7 @@ integración objetivo deberán transportar el UUID de CORE como texto.
 | Actividad | Body JSON | Respuesta exitosa |
 | --- | --- | --- |
 | Login local | `{ "email": "...", "password": "..." }` | `200`, usuario autenticado y cookie `JSESSIONID`. |
-| Crear/editar carrera | `{ "codigo", "nombre", "facultad", "duracion", "titulo" }` | `201` al crear, `200` al editar; carrera con `id` y `estado`. |
+| Crear/editar carrera | `{ "codigo", "nombre", "facultad", "titulo" }` | `201` al crear, `200` al editar; la respuesta incluye `duracion`, calculada automáticamente según las materias de la carrera. |
 | Crear plan | `{ "codigo", "nombre", "vigenciaDesde", "cantidadAsignaturas" }` | `201`; plan con `id`, `estado` y `carreraId`. |
 | Crear asignatura | `{ "codigo", "nombre", "anio", "creditos", "cargaHoraria" }` | `201`; asignatura con `id`, `estado` y `planId`. |
 | Crear correlatividad | `{ "correlativaId": 1, "tipo": "REGULAR|APROBADA" }` | `201`; relación creada. |
@@ -131,7 +131,7 @@ integración objetivo deberán transportar el UUID de CORE como texto.
 | Inscribir alumno | `{ "alumnoId" }` | `201`; inscripción en estado `INSCRIPTO`. |
 | Cambiar inscripción | `{ "estado", "notaFinal"?, "fechaResultado"? }` | `200`; inscripción actualizada. Los campos opcionales pasan a ser obligatorios para un estado final. |
 | Cargar nota final | `{ "notaFinal", "estado": "APROBADO|DESAPROBADO", "fechaResultado"? }` | `200`; nota publicada. Si falta fecha se usa la fecha actual. |
-| Validar regularidad | `{ "asistencia", "promedio", "asistenciaMinima", "promedioMinimo" }` | `200`; `{ "regular", "habilitadoParaFinal", "motivos" }`. |
+| Validar regularidad | `{ "alumnoId", "cursoId", "asistencia", "promedio", "asistenciaMinima", "promedioMinimo" }` | `200`; devuelve resultado y contexto del alumno, curso y asignatura. Requiere inscripción activa. |
 
 Las consultas devuelven listas de los DTO de respuesta anteriores. El detalle de curso
 devuelve `{ "curso", "docentes", "inscripciones" }`; el listado de inscripciones de un
@@ -238,6 +238,10 @@ Estas consultas ya existen en Gestión Académica:
 | `GET` | `/api/academica/carreras` | Carreras con `id`, `codigo`, `nombre`, `facultad`, `duracion`, `titulo` y `estado`. Sirve para encontrar el `carreraId`. |
 | `GET` | `/api/academica/carreras/{carreraId}/planes` | Planes de esa carrera con `id`, `codigo`, `nombre`, `vigenciaDesde`, `cantidadAsignaturas`, `estado` y `carreraId`. |
 | `GET` | `/api/academica/planes/{planId}/asignaturas` | Asignaturas de ese plan con `id`, `codigo`, `nombre`, `anio`, `creditos`, `cargaHoraria`, `estado` y `planId`. |
+
+La duración no se recibe al crear o editar una carrera. Se deriva de la cantidad de
+asignaturas asociadas a sus planes: cinco materias completan un cuatrimestre y diez,
+un año. Una fracción de cuatrimestre se redondea al cuatrimestre necesario.
 
 Para comprobar si una asignatura pertenece a una carrera, consultar los planes de la
 carrera y buscar su `id` en las asignaturas de cada plan. Si ya se conoce el `planId`,

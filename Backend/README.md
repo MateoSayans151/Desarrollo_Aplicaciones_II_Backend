@@ -52,11 +52,11 @@ en las respuestas de cursos.
 
 ## Funcionalidades
 
-- Carreras, planes de estudio, asignaturas y correlatividades.
+- Carreras con duración calculada según sus materias, planes de estudio, asignaturas y correlatividades.
 - Sedes, aulas, capacidad, agenda y detección de superposición horaria.
 - Cuatrimestres y turnos de examen final.
 - Cursos/comisiones por cuatrimestre, con docentes, inscripciones y horarios de aula.
-- Validación de regularidad por asistencia y promedio.
+- Validación de regularidad por curso y alumno, con inscripción y correlativas aprobadas.
 - Usuarios persistidos, login por sesión y autorización por permiso administrativo.
 
 ## Ejecución
@@ -172,12 +172,18 @@ permiso `USUARIO` recibe HTTP 403.
 
 ```json
 {
+  "alumnoId": "alumno-123",
+  "cursoId": 42,
   "asistencia": 80,
   "promedio": 7,
   "asistenciaMinima": 75,
   "promedioMinimo": 6
 }
 ```
+
+El alumno debe tener una inscripción activa en el curso. `regular` depende de la
+asistencia y el promedio; `habilitadoParaFinal` exige además todas las materias
+correlativas aprobadas.
 
 ## Pruebas
 

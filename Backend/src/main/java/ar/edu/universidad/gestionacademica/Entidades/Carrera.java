@@ -16,8 +16,9 @@ public class Carrera {
     private String nombre;
     @NotBlank @Column(nullable = false)
     private String facultad;
-    @NotBlank @Column(nullable = false)
-    private String duracion;
+    @Column(nullable = false)
+    @Builder.Default
+    private String duracion = "0 años";
     @NotBlank @Column(nullable = false)
     private String titulo;
     @Enumerated(EnumType.STRING) @Column(nullable = false)
