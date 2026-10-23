@@ -27,6 +27,7 @@ public class CursoServicio {
     private final PeriodoAcademicoRepositorio periodos;
     private final SedeRepositorio sedes;
     private final AulaRepositorio aulas;
+    private final AsignacionAulaRepositorio asignaciones;
     private final CursoDocenteRepositorio cursoDocentes;
     private final InscripcionCursoRepositorio inscripciones;
     private final CorrelatividadRepositorio correlatividades;
@@ -41,6 +42,8 @@ public class CursoServicio {
         }
         Aula aula = validarAula(dto.aulaId(), dto.sedeId(), dto.cupoMaximo());
         validarDisponibilidad(aula.getId(), dto.diaSemana(), periodo.getId(), dto.horaInicio(), dto.horaFin());
+        validarAsignacionesPuntuales(aula.getId(), dto.diaSemana(), dto.fechaInicio(), dto.fechaFin(),
+                dto.horaInicio(), dto.horaFin());
         Curso curso = cursos.save(Curso.builder()
                 .codigo(dto.codigo().trim()).asignatura(buscarAsignatura(dto.asignaturaId())).periodo(periodo)
                 .sede(buscarSede(dto.sedeId())).modalidad(dto.modalidad()).cupoMaximo(dto.cupoMaximo())
@@ -175,6 +178,8 @@ public class CursoServicio {
                 aula.getId(), dto.diaSemana(), curso.getPeriodo().getId(), dto.horaFin(), dto.horaInicio(), cursoId)) {
             throw new ReglaNegocioException("El aula ya está ocupada en ese horario durante el período del curso");
         }
+        validarAsignacionesPuntuales(aula.getId(), dto.diaSemana(), curso.getFechaInicio(), curso.getFechaFin(),
+                dto.horaInicio(), dto.horaFin());
         curso.setAula(aula);
         curso.setDiaSemana(dto.diaSemana());
         curso.setHoraInicio(dto.horaInicio());
@@ -201,6 +206,18 @@ public class CursoServicio {
         if (cursos.existsByAulaIdAndDiaSemanaAndPeriodoIdAndHoraInicioLessThanAndHoraFinGreaterThan(
                 aulaId, diaSemana, periodoId, horaFin, horaInicio)) {
             throw new ReglaNegocioException("El aula ya está ocupada en ese horario durante el período del curso");
+        }
+    }
+
+    private void validarAsignacionesPuntuales(Long aulaId, java.time.DayOfWeek diaSemana,
+                                               LocalDate fechaInicio, LocalDate fechaFin,
+                                               java.time.LocalTime horaInicio,
+                                               java.time.LocalTime horaFin) {
+        boolean existeConflicto = asignaciones.findConflictosConCurso(
+                        aulaId, fechaInicio, fechaFin, horaInicio, horaFin).stream()
+                .anyMatch(asignacion -> asignacion.getFecha().getDayOfWeek() == diaSemana);
+        if (existeConflicto) {
+            throw new ReglaNegocioException("El aula tiene una asignación puntual en ese horario durante el curso");
         }
     }
 

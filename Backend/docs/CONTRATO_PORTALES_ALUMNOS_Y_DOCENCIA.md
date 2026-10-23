@@ -75,13 +75,18 @@ No existen controladores `/api/usuarios`, ni endpoints para crear o listar usuar
 | `GET` | `/api/planificacion/sedes/{sedeId}/aulas` | Listar aulas de la sede. |
 | `POST` | `/api/planificacion/asignaciones` | Reservar un aula para una asignatura en una fecha y horario. |
 | `GET` | `/api/planificacion/asignaciones` | Listar asignaciones registradas, ordenadas por fecha y hora. |
-| `GET` | `/api/planificacion/aulas/{aulaId}/agenda?fecha=AAAA-MM-DD` | Consultar agenda diaria del aula. |
-| `GET` | `/api/planificacion/aulas/{aulaId}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar ocupaciones del aula entre dos fechas inclusivas, ordenadas por fecha y hora. |
+| `GET` | `/api/planificacion/aulas/{aulaId}/agenda?fecha=AAAA-MM-DD` | Consultar agenda diaria unificada del aula, incluyendo cursos y asignaciones puntuales. |
+| `GET` | `/api/planificacion/aulas/{aulaId}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar cursos y asignaciones puntuales del aula entre dos fechas inclusivas, ordenados por fecha y hora. |
 | `GET` | `/api/planificacion/asignaturas/{asignaturaId}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar horarios ocupados de la asignatura entre dos fechas inclusivas. |
 | `POST` | `/api/planificacion/periodos` | Crear período académico y ventana de inscripción. |
 | `GET` | `/api/planificacion/periodos` | Listar períodos. |
 | `POST` | `/api/planificacion/turnos-examen` | Crear turno de examen y ventana de inscripción. |
 | `GET` | `/api/planificacion/turnos-examen` | Listar turnos de examen. |
+
+La agenda del aula devuelve una lista unificada con `tipo` (`CURSO` o `ASIGNACION`),
+`referenciaId`, aula, asignatura, fecha y horario. Para cursos también informa
+`cursoCodigo`; para asignaciones puntuales informa `cantidadEstudiantes`. Cada curso
+se expande en una ocurrencia por semana dentro de sus fechas de inicio y fin.
 
 ### Cursos, docentes, inscripciones y notas
 
@@ -152,8 +157,9 @@ Salvo health, Swagger y login, la configuración actual exige
   pertenecer al mismo plan.
 - Aulas: sólo ubicaciones de tipo `AULA` pueden asignarse; la cantidad de estudiantes o
   el cupo del curso no puede superar su capacidad.
-- Ocupación: no se permiten horarios superpuestos para la misma aula. Las asignaciones
-  puntuales comparan fecha y hora; los cursos comparan día de semana y período.
+- Ocupación: no se permiten horarios superpuestos para la misma aula, tampoco entre
+  tipos distintos. Las asignaciones puntuales comparan fecha y hora; los cursos comparan
+  día de semana y período, y la agenda expande cada ocurrencia semanal dentro del rango.
 - Cursos: la fecha final debe ser posterior a la inicial y ambas deben caer dentro del
   período académico; la hora final debe ser posterior a la inicial; el aula debe
   pertenecer a la sede elegida.

@@ -25,6 +25,13 @@ public final class PlanificacionDto {
     public record AsignacionRespuestaDto(Long id, Long aulaId, Long asignaturaId, LocalDate fecha,
                                          LocalTime horaInicio, LocalTime horaFin, int cantidadEstudiantes) { }
 
+    public enum TipoOcupacionAula { CURSO, ASIGNACION }
+    public record OcupacionAulaDto(TipoOcupacionAula tipo, Long referenciaId, Long aulaId,
+                                   Long asignaturaId, String asignaturaCodigo,
+                                   String asignaturaNombre, String cursoCodigo, LocalDate fecha,
+                                   LocalTime horaInicio, LocalTime horaFin,
+                                   Integer cantidadEstudiantes) { }
+
     public record CrearPeriodoDto(@Min(2000) int anio, @Min(1) @Max(2) int numero,
                                   @NotNull LocalDate fechaInicio, @NotNull LocalDate fechaFin,
                                   @NotNull LocalDate inscripcionDesde, @NotNull LocalDate inscripcionHasta) { }

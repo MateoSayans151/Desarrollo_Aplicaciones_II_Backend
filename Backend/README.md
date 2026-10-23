@@ -134,8 +134,8 @@ reemplazar la autenticación en memoria por OAuth2/SSO de la universidad.
 | POST / GET | `/api/planificacion/sedes` | Crear/listar sedes |
 | POST / GET | `/api/planificacion/sedes/{id}/aulas` | Crear/listar aulas; nombre opcional al crear |
 | POST / GET | `/api/planificacion/asignaciones` | Crear/listar asignaciones de aulas |
-| GET | `/api/planificacion/aulas/{id}/agenda?fecha=AAAA-MM-DD` | Consultar agenda diaria de un aula |
-| GET | `/api/planificacion/aulas/{id}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar todas las ocupaciones de un aula dentro de un rango inclusivo |
+| GET | `/api/planificacion/aulas/{id}/agenda?fecha=AAAA-MM-DD` | Consultar agenda diaria unificada de un aula (cursos y asignaciones puntuales) |
+| GET | `/api/planificacion/aulas/{id}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar cursos y asignaciones puntuales de un aula dentro de un rango inclusivo |
 | GET | `/api/planificacion/asignaturas/{id}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar horarios ocupados por una asignatura en el rango indicado |
 | POST / GET | `/api/planificacion/periodos` | Crear/listar cuatrimestres |
 | POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Las respuestas incluyen `sedeNombre` y `aulaNombre`. Al crear requiere turno, horas, `diaSemana` y `aulaId`. |

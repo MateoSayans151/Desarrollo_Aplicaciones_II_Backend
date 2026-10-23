@@ -39,7 +39,7 @@ public class PlanificacionController {
         return servicio.agendaAsignatura(asignaturaId, desde, hasta);
     }
     @GetMapping("/aulas/{aulaId}/agenda")
-    public List<AsignacionRespuestaDto> agenda(@PathVariable Long aulaId,
+    public List<OcupacionAulaDto> agenda(@PathVariable Long aulaId,
             @RequestParam(required = false) LocalDate fecha,
             @RequestParam(required = false) LocalDate desde,
             @RequestParam(required = false) LocalDate hasta) {

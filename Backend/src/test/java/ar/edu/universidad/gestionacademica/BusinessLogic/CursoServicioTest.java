@@ -24,13 +24,14 @@ class CursoServicioTest {
     private final PeriodoAcademicoRepositorio periodos = mock(PeriodoAcademicoRepositorio.class);
     private final SedeRepositorio sedes = mock(SedeRepositorio.class);
     private final AulaRepositorio aulas = mock(AulaRepositorio.class);
+    private final AsignacionAulaRepositorio asignaciones = mock(AsignacionAulaRepositorio.class);
     private final CursoDocenteRepositorio cursoDocentes = mock(CursoDocenteRepositorio.class);
     private final InscripcionCursoRepositorio inscripciones = mock(InscripcionCursoRepositorio.class);
     private final CorrelatividadRepositorio correlatividades = mock(CorrelatividadRepositorio.class);
     private final ApplicationEventPublisher eventos = mock(ApplicationEventPublisher.class);
 
     private final CursoServicio servicio = new CursoServicio(cursos, asignaturas, periodos, sedes, aulas,
-            cursoDocentes, inscripciones, correlatividades, eventos);
+            asignaciones, cursoDocentes, inscripciones, correlatividades, eventos);
 
     @Test
     void crearCursoGuardaTurnoYHorasYRechazaUnRangoInvertido() {
@@ -61,6 +62,28 @@ class CursoServicioTest {
                 ModalidadCurso.PRESENCIAL, 45, LocalDate.of(2026, 8, 10), LocalDate.of(2026, 11, 30),
                 TurnoCurso.TARDE, LocalTime.of(18, 0), LocalTime.of(14, 0), DayOfWeek.MONDAY, 3L)))
                 .hasMessageContaining("hora de fin");
+    }
+
+    @Test
+    void rechazaCursoCuandoCoincideConUnaAsignacionPuntual() {
+        var inicio = LocalDate.of(2026, 8, 10);
+        var fin = LocalDate.of(2026, 11, 30);
+        PeriodoAcademico periodo = PeriodoAcademico.builder().id(8L)
+                .fechaInicio(LocalDate.of(2026, 8, 1)).fechaFin(fin).build();
+        when(periodos.findById(8L)).thenReturn(Optional.of(periodo));
+        when(aulas.findById(3L)).thenReturn(Optional.of(Aula.builder().id(3L)
+                .sede(Sede.builder().id(2L).build()).tipo(TipoUbicacion.AULA).capacidadMaxima(50).build()));
+        when(asignaciones.findConflictosConCurso(3L, inicio, fin,
+                LocalTime.of(14, 0), LocalTime.of(18, 0))).thenReturn(List.of(
+                AsignacionAula.builder().fecha(LocalDate.of(2026, 8, 17)).build()));
+        var dto = new CursoDto.CrearCursoDto("DDA2-A", 15L, 8L, 2L, ModalidadCurso.PRESENCIAL,
+                45, inicio, fin, TurnoCurso.TARDE, LocalTime.of(14, 0), LocalTime.of(18, 0),
+                DayOfWeek.MONDAY, 3L);
+
+        assertThatThrownBy(() -> servicio.crear(dto))
+                .isInstanceOf(ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException.class)
+                .hasMessageContaining("asignación puntual");
+        verify(cursos, never()).save(any());
     }
 
     @Test

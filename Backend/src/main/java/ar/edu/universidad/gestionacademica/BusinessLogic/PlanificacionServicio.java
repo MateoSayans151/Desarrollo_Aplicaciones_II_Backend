@@ -8,6 +8,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import static ar.edu.universidad.gestionacademica.Modelos.PlanificacionDto.*;
@@ -20,6 +23,7 @@ public class PlanificacionServicio {
     private final AulaRepositorio aulas;
     private final AsignaturaRepositorio asignaturas;
     private final AsignacionAulaRepositorio asignaciones;
+    private final CursoRepositorio cursos;
     private final PeriodoAcademicoRepositorio periodos;
     private final TurnoExamenRepositorio turnos;
 
@@ -55,23 +59,33 @@ public class PlanificacionServicio {
         if (asignaciones.existsByAulaIdAndFechaAndHoraInicioLessThanAndHoraFinGreaterThan(dto.aulaId(), dto.fecha(), dto.horaFin(), dto.horaInicio())) {
             throw new ReglaNegocioException("El aula ya esta ocupada en ese horario");
         }
+        if (cursos.countOcupacionesEnFecha(dto.aulaId(), dto.fecha().getDayOfWeek(), dto.fecha(),
+                dto.horaInicio(), dto.horaFin(), EstadoCurso.CANCELADO) > 0) {
+            throw new ReglaNegocioException("El aula ya esta ocupada por un curso en ese horario");
+        }
         AsignacionAula a = asignaciones.save(AsignacionAula.builder().aula(aula).asignatura(asignatura)
                 .fecha(dto.fecha()).horaInicio(dto.horaInicio()).horaFin(dto.horaFin())
                 .cantidadEstudiantes(dto.cantidadEstudiantes()).build());
         return asignacion(a);
     }
     @Transactional(readOnly = true)
-    public List<AsignacionRespuestaDto> agendaAula(Long aulaId, LocalDate fecha) {
-        validarAulaExistente(aulaId);
-        return asignaciones.findByAulaIdAndFechaOrderByHoraInicio(aulaId, fecha).stream()
-                .map(this::asignacion).toList();
+    public List<OcupacionAulaDto> agendaAula(Long aulaId, LocalDate fecha) {
+        return agendaAula(aulaId, fecha, fecha);
     }
     @Transactional(readOnly = true)
-    public List<AsignacionRespuestaDto> agendaAula(Long aulaId, LocalDate desde, LocalDate hasta) {
+    public List<OcupacionAulaDto> agendaAula(Long aulaId, LocalDate desde, LocalDate hasta) {
         validarAulaExistente(aulaId);
         validarRangoAgenda(desde, hasta);
-        return asignaciones.findByAulaIdAndFechaBetweenOrderByFechaAscHoraInicioAsc(
-                aulaId, desde, hasta).stream().map(this::asignacion).toList();
+        List<OcupacionAulaDto> ocupaciones = new ArrayList<>();
+        asignaciones.findByAulaIdAndFechaBetweenOrderByFechaAscHoraInicioAsc(aulaId, desde, hasta)
+                .stream().map(this::ocupacion).forEach(ocupaciones::add);
+        cursos.findOcupacionesEnRango(aulaId, desde, hasta, EstadoCurso.CANCELADO)
+                .forEach(curso -> agregarOcurrenciasCurso(ocupaciones, curso, desde, hasta));
+        ocupaciones.sort(Comparator.comparing(OcupacionAulaDto::fecha)
+                .thenComparing(OcupacionAulaDto::horaInicio)
+                .thenComparing(OcupacionAulaDto::tipo)
+                .thenComparing(OcupacionAulaDto::referenciaId));
+        return ocupaciones;
     }
     @Transactional(readOnly = true)
     public List<AsignacionRespuestaDto> listarAsignaciones() {
@@ -134,6 +148,25 @@ public class PlanificacionServicio {
                 a.getCapacidadMaxima(), a.getSede().getId(), a.getEstado());
     }
     private AsignacionRespuestaDto asignacion(AsignacionAula a) { return new AsignacionRespuestaDto(a.getId(), a.getAula().getId(), a.getAsignatura().getId(), a.getFecha(), a.getHoraInicio(), a.getHoraFin(), a.getCantidadEstudiantes()); }
+    private OcupacionAulaDto ocupacion(AsignacionAula a) {
+        return new OcupacionAulaDto(TipoOcupacionAula.ASIGNACION, a.getId(), a.getAula().getId(),
+                a.getAsignatura().getId(), a.getAsignatura().getCodigo(), a.getAsignatura().getNombre(),
+                null, a.getFecha(), a.getHoraInicio(), a.getHoraFin(), a.getCantidadEstudiantes());
+    }
+    private void agregarOcurrenciasCurso(List<OcupacionAulaDto> ocupaciones, Curso curso,
+                                          LocalDate desde, LocalDate hasta) {
+        if (curso.getDiaSemana() == null || curso.getHoraInicio() == null || curso.getHoraFin() == null) return;
+        LocalDate inicio = desde.isAfter(curso.getFechaInicio()) ? desde : curso.getFechaInicio();
+        LocalDate fin = hasta.isBefore(curso.getFechaFin()) ? hasta : curso.getFechaFin();
+        LocalDate fecha = inicio.with(TemporalAdjusters.nextOrSame(curso.getDiaSemana()));
+        while (!fecha.isAfter(fin)) {
+            ocupaciones.add(new OcupacionAulaDto(TipoOcupacionAula.CURSO, curso.getId(),
+                    curso.getAula().getId(), curso.getAsignatura().getId(), curso.getAsignatura().getCodigo(),
+                    curso.getAsignatura().getNombre(), curso.getCodigo(), fecha, curso.getHoraInicio(),
+                    curso.getHoraFin(), null));
+            fecha = fecha.plusWeeks(1);
+        }
+    }
     private PeriodoRespuestaDto periodo(PeriodoAcademico p) { return new PeriodoRespuestaDto(p.getId(), p.getAnio(), p.getNumero(), p.getFechaInicio(), p.getFechaFin(), p.getInscripcionDesde(), p.getInscripcionHasta()); }
     private TurnoRespuestaDto turno(TurnoExamen t) { return new TurnoRespuestaDto(t.getId(), t.getNombre(), t.getFechaInicio(), t.getFechaFin(), t.getInscripcionDesde(), t.getInscripcionHasta()); }
 }

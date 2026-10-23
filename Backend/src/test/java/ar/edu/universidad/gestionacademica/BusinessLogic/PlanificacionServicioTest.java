@@ -3,6 +3,8 @@ package ar.edu.universidad.gestionacademica.BusinessLogic;
 import ar.edu.universidad.gestionacademica.Entidades.Aula;
 import ar.edu.universidad.gestionacademica.Entidades.AsignacionAula;
 import ar.edu.universidad.gestionacademica.Entidades.Asignatura;
+import ar.edu.universidad.gestionacademica.Entidades.Curso;
+import ar.edu.universidad.gestionacademica.Entidades.EstadoCurso;
 import ar.edu.universidad.gestionacademica.Entidades.Sede;
 import ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException;
 import ar.edu.universidad.gestionacademica.Modelos.PlanificacionDto;
@@ -13,6 +15,7 @@ import java.util.Optional;
 import java.util.List;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.DayOfWeek;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,8 +27,9 @@ class PlanificacionServicioTest {
     private final AulaRepositorio aulas = mock(AulaRepositorio.class);
     private final AsignaturaRepositorio asignaturas = mock(AsignaturaRepositorio.class);
     private final AsignacionAulaRepositorio asignaciones = mock(AsignacionAulaRepositorio.class);
+    private final CursoRepositorio cursos = mock(CursoRepositorio.class);
     private final PlanificacionServicio servicio = new PlanificacionServicio(sedes, aulas,
-            asignaturas, asignaciones,
+            asignaturas, asignaciones, cursos,
             mock(PeriodoAcademicoRepositorio.class), mock(TurnoExamenRepositorio.class));
 
     @Test
@@ -108,7 +112,56 @@ class PlanificacionServicioTest {
                 .thenReturn(List.of(asignacion));
 
         assertThat(servicio.agendaAula(4L, desde, hasta))
-                .extracting(PlanificacionDto.AsignacionRespuestaDto::id).containsExactly(12L);
+                .extracting(PlanificacionDto.OcupacionAulaDto::referenciaId).containsExactly(12L);
+    }
+
+    @Test
+    void combinaAsignacionesPuntualesYOcurrenciasSemanalesDeCursosEnLaAgenda() {
+        var aula = Aula.builder().id(4L).build();
+        var asignatura = Asignatura.builder().id(8L).codigo("DDA2")
+                .nombre("Desarrollo de Aplicaciones II").build();
+        var desde = LocalDate.of(2026, 10, 1);
+        var hasta = LocalDate.of(2026, 10, 31);
+        var asignacion = AsignacionAula.builder().id(12L).aula(aula).asignatura(asignatura)
+                .fecha(LocalDate.of(2026, 10, 7)).horaInicio(LocalTime.of(8, 0))
+                .horaFin(LocalTime.of(9, 0)).cantidadEstudiantes(20).build();
+        var curso = Curso.builder().id(42L).codigo("DDA2-A").aula(aula).asignatura(asignatura)
+                .estado(EstadoCurso.EN_CURSO).fechaInicio(LocalDate.of(2026, 10, 5))
+                .fechaFin(LocalDate.of(2026, 10, 26)).diaSemana(DayOfWeek.MONDAY)
+                .horaInicio(LocalTime.of(10, 0)).horaFin(LocalTime.of(12, 0)).build();
+        when(aulas.existsById(4L)).thenReturn(true);
+        when(asignaciones.findByAulaIdAndFechaBetweenOrderByFechaAscHoraInicioAsc(4L, desde, hasta))
+                .thenReturn(List.of(asignacion));
+        when(cursos.findOcupacionesEnRango(4L, desde, hasta, EstadoCurso.CANCELADO))
+                .thenReturn(List.of(curso));
+
+        var agenda = servicio.agendaAula(4L, desde, hasta);
+
+        assertThat(agenda).hasSize(5);
+        assertThat(agenda).filteredOn(item -> item.tipo() == PlanificacionDto.TipoOcupacionAula.CURSO)
+                .extracting(PlanificacionDto.OcupacionAulaDto::fecha)
+                .containsExactly(LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 12),
+                        LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 26));
+        assertThat(agenda).filteredOn(item -> item.tipo() == PlanificacionDto.TipoOcupacionAula.ASIGNACION)
+                .singleElement().satisfies(item -> assertThat(item.referenciaId()).isEqualTo(12L));
+    }
+
+    @Test
+    void rechazaAsignacionPuntualCuandoElAulaEstaOcupadaPorUnCurso() {
+        var fecha = LocalDate.of(2026, 10, 5);
+        var aula = Aula.builder().id(4L).tipo(ar.edu.universidad.gestionacademica.Entidades.TipoUbicacion.AULA)
+                .capacidadMaxima(40).build();
+        when(aulas.findById(4L)).thenReturn(Optional.of(aula));
+        when(asignaturas.findById(8L)).thenReturn(Optional.of(Asignatura.builder().id(8L).build()));
+        when(cursos.countOcupacionesEnFecha(4L, DayOfWeek.MONDAY, fecha,
+                LocalTime.of(10, 0), LocalTime.of(12, 0), EstadoCurso.CANCELADO)).thenReturn(1L);
+        var dto = new PlanificacionDto.CrearAsignacionDto(4L, 8L, fecha,
+                LocalTime.of(10, 0), LocalTime.of(12, 0), 30);
+
+        assertThatThrownBy(() -> servicio.asignarAula(dto))
+                .isInstanceOf(ReglaNegocioException.class)
+                .hasMessageContaining("ocupada por un curso");
+        verify(asignaciones, never()).save(any());
     }
 
     @Test
