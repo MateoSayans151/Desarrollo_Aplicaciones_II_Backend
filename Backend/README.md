@@ -15,6 +15,9 @@ de campo compartido `alumnoId` para identificar al alumno en las inscripciones.
 El inventario exhaustivo, las reglas de negocio y las diferencias entre el estado
 actual y el contrato objetivo de CORE están en
 [`docs/CONTRATO_PORTALES_ALUMNOS_Y_DOCENCIA.md`](docs/CONTRATO_PORTALES_ALUMNOS_Y_DOCENCIA.md).
+Los datos que se deben pedir a CORE, el texto de solicitud y el procedimiento para
+consumir APIs de otros módulos están en
+[`docs/INTEGRACION_CORE.md`](docs/INTEGRACION_CORE.md).
 El recorrido visual está en el
 [`mapa interactivo de arquitectura`](docs/arquitectura-interactiva/index.html).
 
@@ -29,7 +32,11 @@ CORE_JWT_AUDIENCE=academic-service
 Los endpoints de este servicio se implementan bajo `/api/planificacion`,
 `/api/academica` y otros controladores del módulo. La ruta externa del gateway
 se configura por separado. Las comprobaciones de vida están en `GET /health/live`
-y `GET /health/ready`.
+y `GET /health/ready`; readiness comprueba la conexión con PostgreSQL.
+
+Los errores de aplicación usan `application/problem+json` e incluyen `code` y
+`correlationId`. Los errores `401` y `403` de Spring Security todavía deben adoptar
+el mismo formato durante la integración con CORE.
 
 Los códigos nuevos de carreras, planes, asignaturas y cursos usan el formato
 `ARQ-001` o `ARQ1-001` (`^[A-Z]{3}[0-9]?-[0-9]{3}$`). La API rechaza con HTTP 400
@@ -114,14 +121,6 @@ Estas credenciales son únicamente para desarrollo. En un entorno real se deben 
 `UNIVERSIDAD_ADMIN_EMAIL`, `UNIVERSIDAD_ADMIN_PASSWORD` y `UNIVERSIDAD_DOMINIO_EMAIL`, o
 reemplazar la autenticación en memoria por OAuth2/SSO de la universidad.
 
-### Usuario admin de prueba
-
-Además del admin sembrado por defecto, existe un usuario admin de prueba creado a mano
-para testear la API:
-
-- Usuario: `admin.prueba@universidad.edu.ar`
-- Clave: `AdminPrueba123!`
-
 ## Endpoints principales
 
 | Método | Ruta | Operación |
@@ -136,6 +135,7 @@ para testear la API:
 | POST / GET | `/api/planificacion/sedes/{id}/aulas` | Crear/listar aulas; nombre opcional al crear |
 | POST / GET | `/api/planificacion/asignaciones` | Crear/listar asignaciones de aulas |
 | GET | `/api/planificacion/aulas/{id}/agenda?fecha=AAAA-MM-DD` | Consultar agenda diaria de un aula |
+| GET | `/api/planificacion/aulas/{id}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar todas las ocupaciones de un aula dentro de un rango inclusivo |
 | GET | `/api/planificacion/asignaturas/{id}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar horarios ocupados por una asignatura en el rango indicado |
 | POST / GET | `/api/planificacion/periodos` | Crear/listar cuatrimestres |
 | POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Las respuestas incluyen `sedeNombre` y `aulaNombre`. Al crear requiere turno, horas, `diaSemana` y `aulaId`. |

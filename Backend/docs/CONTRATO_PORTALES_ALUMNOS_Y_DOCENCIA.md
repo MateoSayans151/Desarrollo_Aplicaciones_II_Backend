@@ -22,7 +22,7 @@ objetivo con CORE:
 | Endpoints privados `/internal/v1/**` | No implementados | El módulo actualmente no expone endpoints backend-a-backend. |
 | Backoffice | Preparado, no conectado | Existen referencias `backofficeSiteId`/`backofficeLocationId`; falta el cliente HTTP y la sincronización paginada. |
 | Eventos CORE | Pendiente de adaptar | El publicador Rabbit opcional actual usa un envelope y topología propios. CORE exige publicar mediante su contrato, no declarar exchanges/colas desde este módulo. |
-| Errores CORE | Pendiente de adaptar | Hoy se responde `{ mensaje, errores? }`; CORE exige `application/problem+json` con `code` y `correlationId`. |
+| Errores CORE | Parcial | Los errores de aplicación usan `application/problem+json` con `code` y `correlationId`; falta aplicar la misma forma a los `401` y `403` de Spring Security. |
 
 Por lo tanto, las rutas listadas abajo son rutas internas actuales del servicio. No deben
 exponerse directamente a Internet. La URL pública definitiva debe pasar por el gateway.
@@ -34,7 +34,7 @@ exponerse directamente a Internet. La URL pública definitiva debe pasar por el 
 | Método | Ruta | Resultado |
 | --- | --- | --- |
 | `GET` | `/health/live` | Liveness del proceso. |
-| `GET` | `/health/ready` | Readiness del servicio. Actualmente confirma el estado de la aplicación, no ejecuta una prueba explícita de DB. |
+| `GET` | `/health/ready` | Readiness del servicio. Comprueba la conexión a PostgreSQL y devuelve `503 { "status": "DOWN" }` si no está disponible. |
 | `POST` | `/api/auth/login` | Autentica email/contraseña local, crea sesión y devuelve el usuario sin contraseña. |
 | `GET` | `/swagger-ui.html` | Interfaz Swagger. |
 | `GET` | `/v3/api-docs` | Documento OpenAPI generado. |
@@ -76,6 +76,7 @@ No existen controladores `/api/usuarios`, ni endpoints para crear o listar usuar
 | `POST` | `/api/planificacion/asignaciones` | Reservar un aula para una asignatura en una fecha y horario. |
 | `GET` | `/api/planificacion/asignaciones` | Listar asignaciones registradas, ordenadas por fecha y hora. |
 | `GET` | `/api/planificacion/aulas/{aulaId}/agenda?fecha=AAAA-MM-DD` | Consultar agenda diaria del aula. |
+| `GET` | `/api/planificacion/aulas/{aulaId}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar ocupaciones del aula entre dos fechas inclusivas, ordenadas por fecha y hora. |
 | `GET` | `/api/planificacion/asignaturas/{asignaturaId}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar horarios ocupados de la asignatura entre dos fechas inclusivas. |
 | `POST` | `/api/planificacion/periodos` | Crear período académico y ventana de inscripción. |
 | `GET` | `/api/planificacion/periodos` | Listar períodos. |
@@ -177,15 +178,18 @@ y `TipoUbicacion = AULA | AUDITORIO | COMEDOR | BIBLIOTECA`.
 
 ## Errores actuales
 
-| Caso | HTTP | Body actual |
-| --- | --- | --- |
-| Recurso inexistente | `404` | `{ "mensaje": "...", "errores": null }` |
-| Regla de negocio | `400` | `{ "mensaje": "...", "errores": null }` |
-| Validación de DTO | `400` | `{ "mensaje": "Hay datos invalidos en la solicitud", "errores": { "campo": "detalle" } }` |
-| Sin sesión/token | `401` | Respuesta de Spring Security. |
-| Sin rol requerido | `403` | Respuesta de Spring Security. |
+Los errores de aplicación responden `application/problem+json` con `type`, `title`,
+`status`, `detail`, `instance`, `code` y `correlationId`. Los errores de validación
+agregan `errors`, un objeto por campo.
 
-Esta forma aún debe migrarse al `application/problem+json` requerido por CORE.
+| Caso | HTTP | `code` |
+| --- | --- | --- |
+| Recurso inexistente | `404` | `RESOURCE_NOT_FOUND` |
+| Regla de negocio | `400` | `BUSINESS_RULE_VIOLATION` |
+| Validación de DTO | `400` | `VALIDATION_ERROR` |
+| Error de persistencia | `500` | `DATA_ACCESS_ERROR` |
+| Sin sesión/token | `401` | Respuesta de Spring Security pendiente de unificar. |
+| Sin rol requerido | `403` | Respuesta de Spring Security pendiente de unificar. |
 
 ## Formato obligatorio de códigos
 

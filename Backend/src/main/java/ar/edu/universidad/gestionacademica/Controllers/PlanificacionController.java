@@ -39,8 +39,18 @@ public class PlanificacionController {
         return servicio.agendaAsignatura(asignaturaId, desde, hasta);
     }
     @GetMapping("/aulas/{aulaId}/agenda")
-    public List<AsignacionRespuestaDto> agenda(@PathVariable Long aulaId, @RequestParam LocalDate fecha) {
-        return servicio.agendaAula(aulaId, fecha);
+    public List<AsignacionRespuestaDto> agenda(@PathVariable Long aulaId,
+            @RequestParam(required = false) LocalDate fecha,
+            @RequestParam(required = false) LocalDate desde,
+            @RequestParam(required = false) LocalDate hasta) {
+        if (fecha != null && desde == null && hasta == null) {
+            return servicio.agendaAula(aulaId, fecha);
+        }
+        if (fecha == null && desde != null && hasta != null) {
+            return servicio.agendaAula(aulaId, desde, hasta);
+        }
+        throw new ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException(
+                "Indique una fecha puntual o un rango completo con desde y hasta");
     }
 
     @PostMapping("/periodos") @ResponseStatus(HttpStatus.CREATED)

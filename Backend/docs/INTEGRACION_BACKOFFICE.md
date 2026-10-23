@@ -1,6 +1,10 @@
 # Integración futura con Backoffice
 
-La conexión todavía no está activa. application.properties contiene las propiedades comentadas para configurar la URL base y las rutas cuando Backoffice publique un entorno accesible.
+La conexión todavía no está activa. `application.properties` contiene propiedades
+comentadas como referencia, pero no deben habilitarse hasta que CORE y Backoffice
+confirmen el contrato backend a backend, la URL y el scope del servicio académico.
+
+El pedido completo está resumido en [`INTEGRACION_CORE.md`](INTEGRACION_CORE.md).
 
 > **Decisión de contrato pendiente:** Backoffice informó la ruta pública
 > `/api/v1/backoffice/locations`, pero el contrato de CORE establece que una llamada
@@ -81,7 +85,7 @@ locales relacionadas, junto a `sedeId` y `aulaId`.
 En src/main/resources/application.properties quedaron comentadas estas propiedades:
 
 ~~~properties
-# backoffice.api.base-url=${BACKOFFICE_API_BASE_URL:http://localhost:8082}
+# backoffice.api.base-url=${BACKOFFICE_API_BASE_URL}
 # backoffice.api.sites-path=/api/v1/backoffice/sites
 # backoffice.api.locations-path=/api/v1/backoffice/locations
 ~~~

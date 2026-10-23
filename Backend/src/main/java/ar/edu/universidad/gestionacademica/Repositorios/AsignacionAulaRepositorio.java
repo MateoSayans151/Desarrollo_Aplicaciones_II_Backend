@@ -11,7 +11,12 @@ public interface AsignacionAulaRepositorio extends JpaRepository<AsignacionAula,
     boolean existsByAulaIdAndFechaAndHoraInicioLessThanAndHoraFinGreaterThan(
             Long aulaId, LocalDate fecha, LocalTime horaFin, LocalTime horaInicio);
 
+    @EntityGraph(attributePaths = {"aula", "asignatura"})
     List<AsignacionAula> findByAulaIdAndFechaOrderByHoraInicio(Long aulaId, LocalDate fecha);
+
+    @EntityGraph(attributePaths = {"aula", "asignatura"})
+    List<AsignacionAula> findByAulaIdAndFechaBetweenOrderByFechaAscHoraInicioAsc(
+            Long aulaId, LocalDate desde, LocalDate hasta);
 
     @EntityGraph(attributePaths = {"aula", "asignatura"})
     List<AsignacionAula> findAllByOrderByFechaAscHoraInicioAsc();

@@ -2,11 +2,11 @@
 
 const architectures = {
   current: [
-    ["UI", "Frontend React", "Consume /api/**", "primary"],
-    ["API", "Spring Boot", "Sesión JSESSIONID", "primary"],
+    ["UI", "Frontend React", "API real · sin mocks", "primary"],
+    ["API", "Spring Boot", "JSESSIONID · problem+json", "primary"],
     ["BL", "Servicios de dominio", "Reglas y transacciones", ""],
     ["JPA", "Persistencia", "Spring Data / Hibernate", ""],
-    ["DB", "PostgreSQL", "Supabase administrado", "external"]
+    ["DB", "PostgreSQL", "Supabase · readiness real", "external"]
   ],
   target: [
     ["UI", "Portales", "Alumno · Docente · Admin", "external pending"],
@@ -24,7 +24,7 @@ const flows = [
     steps: [
       ["Crear la carrera", "El código respeta el estándar institucional y no puede repetirse."],
       ["Crear el plan", "Se vincula a una carrera existente y conserva su propia versión y estado."],
-      ["Agregar asignaturas", "Cada materia queda ubicada por año y cuatrimestre dentro del plan."],
+      ["Agregar asignaturas", "Cada materia queda ubicada por año dentro del plan y actualiza la duración calculada de la carrera."],
       ["Definir correlatividades", "La asignatura previa pertenece al mismo plan y no se permiten autorreferencias."],
       ["Publicar o exportar", "El plan completo puede consultarse y descargarse en PDF."]
     ]
@@ -36,7 +36,7 @@ const flows = [
       ["Definir período", "Las fechas de inicio y fin delimitan la cursada y la inscripción."],
       ["Elegir sede y aula", "El aula debe estar activa, tener capacidad suficiente y una clave externa si se sincroniza."],
       ["Crear el curso", "Se valida asignatura, período, modalidad, cupo, fechas y horario."],
-      ["Evitar superposiciones", "No puede haber otro curso o asignación puntual para el mismo espacio y franja."],
+      ["Evitar superposiciones", "Los cursos se comparan con otros cursos del mismo período, aula, día y franja."],
       ["Asignar docentes", "Cada docente se incorpora con un rol docente explícito."]
     ]
   },
@@ -59,7 +59,7 @@ const flows = [
       ["Seleccionar espacio", "Sólo se usan ubicaciones activas de tipo AULA."],
       ["Definir fecha y hora", "La hora de fin debe ser posterior a la de inicio."],
       ["Validar capacidad", "La cantidad estimada de asistentes no puede superar el aula."],
-      ["Consultar agenda", "La reserva queda visible por aula y fecha, sin solapamientos."]
+      ["Consultar agenda", "El calendario mensual consulta por aula y rango, marca días ocupados y abre el detalle diario."]
     ]
   },
   {
@@ -70,41 +70,43 @@ const flows = [
       ["Cruzar el gateway", "CORE enruta /api/v1/academic/* y agrega identidad y correlación."],
       ["Verificar otra vez", "Academic valida firma RS256, issuer, audience y expiración con JWKS."],
       ["Autorizar la actividad", "Se evalúa el permiso académico exacto que CORE todavía debe confirmar."],
-      ["Responder trazablemente", "La API devuelve problem+json para errores y conserva X-Correlation-Id."]
+      ["Responder trazablemente", "Los errores de aplicación ya usan problem+json; falta propagar X-Correlation-Id en logs, llamadas y eventos."]
     ]
   }
 ];
 
 const endpoints = [
   ["GET", "/health/live", "Sistema", "Comprobar proceso vivo", "public", "Sin payload.", "No consulta dependencias externas."],
-  ["GET", "/health/ready", "Sistema", "Comprobar servicio listo", "public", "Sin payload.", "Valida disponibilidad para recibir tráfico."],
+  ["GET", "/health/ready", "Sistema", "Comprobar servicio listo", "public", "Sin payload.", "Comprueba PostgreSQL; devuelve 503 DOWN cuando no está disponible."],
   ["POST", "/api/auth/login", "Autenticación", "Iniciar sesión local", "public", "usuario y contraseña.", "Crea sesión JSESSIONID; este flujo será reemplazado por CORE."],
   ["GET", "/api/auth/me", "Autenticación", "Consultar sesión", "protected", "Cookie de sesión válida.", "Devuelve identidad y autoridades locales."],
   ["POST", "/api/auth/logout", "Autenticación", "Cerrar sesión", "protected", "Cookie de sesión válida.", "Invalida la sesión local."],
   ["GET", "/swagger-ui.html", "Documentación", "Abrir Swagger UI", "docs", "Sin payload.", "Disponible sin autenticación en el perfil actual."],
   ["GET", "/v3/api-docs", "Documentación", "Descargar OpenAPI", "docs", "Sin payload.", "Describe la API; hoy anuncia Bearer aunque el runtime usa sesión."],
 
-  ["POST", "/api/academica/carreras", "Estructura", "Crear carrera", "protected", "Código, nombre y datos académicos.", "Código válido y único."],
+  ["POST", "/api/academica/carreras", "Estructura", "Crear carrera", "protected", "Código, nombre, facultad y título; no recibe duración.", "La duración se deriva de las materias: cinco por cuatrimestre, diez por año."],
   ["GET", "/api/academica/carreras", "Estructura", "Listar carreras", "protected", "Sin payload.", "Devuelve catálogo administrativo."],
   ["PUT", "/api/academica/carreras/{id}", "Estructura", "Modificar carrera", "protected", "Identificador y datos editables.", "La entidad debe existir; conserva unicidad del código."],
-  ["DELETE", "/api/academica/carreras/{id}", "Estructura", "Eliminar carrera", "protected", "Identificador de carrera.", "La eliminación respeta dependencias persistidas."],
+  ["DELETE", "/api/academica/carreras/{id}", "Estructura", "Desactivar carrera", "protected", "Identificador de carrera.", "Realiza una baja lógica y conserva sus relaciones."],
   ["POST", "/api/academica/carreras/{carreraId}/planes", "Estructura", "Crear plan", "protected", "Versión, nombre, estado y vigencia.", "La carrera debe existir."],
   ["GET", "/api/academica/carreras/{carreraId}/planes", "Estructura", "Listar planes de carrera", "protected", "Identificador de carrera.", "Acota el catálogo a la carrera."],
   ["GET", "/api/academica/planes/{planId}/pdf", "Estructura", "Exportar plan en PDF", "protected", "Identificador de plan.", "Incluye estructura y asignaturas del plan."],
-  ["POST", "/api/academica/planes/{planId}/asignaturas", "Estructura", "Agregar asignatura", "protected", "Código, nombre, carga y ubicación curricular.", "Código válido y único; el plan debe existir."],
+  ["POST", "/api/academica/planes/{planId}/asignaturas", "Estructura", "Agregar asignatura", "protected", "Código, nombre, año, créditos y carga horaria.", "Código válido y único; el plan debe existir y la carrera recalcula su duración."],
   ["GET", "/api/academica/planes/{planId}/asignaturas", "Estructura", "Listar asignaturas", "protected", "Identificador de plan.", "Devuelve el orden curricular del plan."],
   ["POST", "/api/academica/asignaturas/{asignaturaId}/correlatividades", "Estructura", "Agregar correlatividad", "protected", "Asignatura previa y condición.", "Mismo plan, sin autorreferencia ni duplicados."],
   ["GET", "/api/academica/asignaturas/{asignaturaId}/correlatividades", "Estructura", "Listar correlatividades", "protected", "Identificador de asignatura.", "Expone requisitos para inscripción."],
 
   ["POST", "/api/planificacion/sedes", "Espacios", "Crear sede", "protected", "Nombre y dirección.", "Las referencias externas se completarán mediante la sincronización futura con Backoffice."],
   ["GET", "/api/planificacion/sedes", "Espacios", "Listar sedes", "protected", "Sin payload.", "Catálogo para formularios administrativos."],
-  ["POST", "/api/planificacion/sedes/{sedeId}/aulas", "Espacios", "Crear aula", "protected", "Código, nombre, capacidad y tipo.", "La sede existe y la ubicación es compatible."],
+  ["POST", "/api/planificacion/sedes/{sedeId}/aulas", "Espacios", "Crear aula", "protected", "Código, nombre opcional y capacidad.", "La sede debe existir; la ubicación local se crea con tipo AULA."],
   ["GET", "/api/planificacion/sedes/{sedeId}/aulas", "Espacios", "Listar aulas de sede", "protected", "Identificador de sede.", "Devuelve espacios asociados a la sede."],
   ["POST", "/api/planificacion/asignaciones", "Espacios", "Reservar aula", "protected", "Asignatura, aula, fecha, horario y asistentes.", "Capacidad, horario y ausencia de solapamientos."],
-  ["GET", "/api/planificacion/aulas/{aulaId}/agenda?fecha=AAAA-MM-DD", "Espacios", "Consultar agenda", "protected", "Aula y fecha ISO.", "Combina ocupaciones académicas del día."],
-  ["POST", "/api/planificacion/periodos", "Calendario", "Crear período académico", "protected", "Código, fechas de cursada e inscripción.", "Rangos cronológicos coherentes y código único."],
+  ["GET", "/api/planificacion/asignaciones", "Espacios", "Listar asignaciones", "protected", "Sin payload.", "Devuelve reservas reales ordenadas por fecha y hora."],
+  ["GET", "/api/planificacion/aulas/{aulaId}/agenda?fecha=AAAA-MM-DD o ?desde=&hasta=", "Espacios", "Consultar agenda del aula", "protected", "Aula y una fecha puntual o un rango ISO completo.", "Valida el aula y devuelve ocupaciones ordenadas; el rango es inclusivo."],
+  ["GET", "/api/planificacion/asignaturas/{asignaturaId}/agenda?desde=&hasta=", "Espacios", "Consultar agenda de la asignatura", "protected", "Asignatura y rango ISO completo.", "Devuelve las aulas y horarios usados por la materia en el rango."],
+  ["POST", "/api/planificacion/periodos", "Calendario", "Crear período académico", "protected", "Año, número y fechas de cursada e inscripción.", "Los rangos son coherentes y la inscripción cierra antes o al comenzar la cursada."],
   ["GET", "/api/planificacion/periodos", "Calendario", "Listar períodos", "protected", "Sin payload.", "Catálogo para cursos e inscripciones."],
-  ["POST", "/api/planificacion/turnos-examen", "Calendario", "Crear turno de examen", "protected", "Nombre, período y rango de fechas.", "El período existe y las fechas son coherentes."],
+  ["POST", "/api/planificacion/turnos-examen", "Calendario", "Crear turno de examen", "protected", "Nombre, fechas del turno y fechas de inscripción.", "Los rangos son coherentes y la inscripción cierra antes del turno."],
   ["GET", "/api/planificacion/turnos-examen", "Calendario", "Listar turnos", "protected", "Sin payload.", "Expone calendario de exámenes."],
 
   ["POST", "/api/planificacion/cursos", "Cursos", "Crear curso", "protected", "Asignatura, período, aula, modalidad, cupo, fechas y horario.", "Valida referencias, rangos, cupo y disponibilidad del aula."],
@@ -119,7 +121,7 @@ const endpoints = [
   ["GET", "/api/planificacion/cursos/{cursoId}/notas", "Resultados", "Listar notas", "protected", "Identificador de curso.", "Incluye resultados registrados del curso."],
   ["GET", "/api/planificacion/cursos/{cursoId}/notas/{alumnoId}", "Resultados", "Consultar nota", "protected", "Curso y alumno.", "Requiere vínculo de inscripción."],
   ["PUT", "/api/planificacion/cursos/{cursoId}/notas/{alumnoId}", "Resultados", "Publicar nota", "protected", "Nota 0–10 y estado final.", "Persiste atómicamente y emite evento después del commit."],
-  ["POST", "/api/regularidad/validar", "Regularidad", "Validar condición", "protected", "Alumno, fecha y contexto académico.", "Calcula la condición; el endpoint actual no persiste el resultado."]
+  ["POST", "/api/regularidad/validar", "Regularidad", "Validar condición", "protected", "alumnoId, cursoId, asistencia, promedio y mínimos.", "Exige inscripción activa, identifica curso y materia y comprueba correlativas aprobadas; no persiste el resultado."]
 ];
 
 const rules = [
@@ -132,6 +134,8 @@ const rules = [
   ["Inscripción protegida", "Se exige ventana abierta, cupo disponible, ausencia de duplicado y correlativas satisfechas."],
   ["Estados cerrados", "Carreras, cursos e inscripciones usan enums explícitos; el cliente no debe inventar strings."],
   ["Resultados atómicos", "La nota va de 0 a 10, se guarda con el estado final y el evento se publica sólo después del commit."],
+  ["Duración derivada", "La carrera no recibe duración manual: cada bloque de cinco materias suma un cuatrimestre y las fracciones se redondean al cuatrimestre necesario."],
+  ["Regularidad contextual", "La validación identifica alumno, curso y materia, exige inscripción activa y correlativas aprobadas para habilitar el final."],
   ["Responsabilidad de datos", "Academic conserva claves locales; UUID de personas, sites y locations pertenecen a CORE o Backoffice."]
 ];
 

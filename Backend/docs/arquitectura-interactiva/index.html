@@ -33,15 +33,16 @@
           <a class="button primary" href="#arquitectura">Explorar arquitectura <span>→</span></a>
           <a class="button ghost" href="#endpoints">Buscar un endpoint</a>
         </div>
-        <div class="scope-note"><span class="pulse"></span> Basado en el código fuente y contratos auditados el 17/10/2026</div>
+        <div class="scope-note"><span class="pulse"></span> Basado en el código fuente y contratos auditados el 23/10/2026</div>
       </div>
       <div class="hero-console reveal" aria-label="Resumen técnico">
         <div class="console-head"><span></span><span></span><span></span><b>academic-service / overview</b></div>
         <div class="console-body">
-          <div class="metric"><strong>39</strong><span>endpoints funcionales</span></div>
+          <div class="metric"><strong>41</strong><span>endpoints funcionales</span></div>
           <div class="metric"><strong>7</strong><span>dominios funcionales</span></div>
-          <div class="metric"><strong>2</strong><span>integraciones objetivo</span></div>
+            <div class="metric"><strong>3</strong><span>frentes de integración</span></div>
           <div class="status-line"><i class="ok"></i><span>Backend Spring Boot + PostgreSQL</span><b>ACTUAL</b></div>
+          <div class="status-line"><i class="ok"></i><span>Frontend conectado, sin datos mock</span><b>ACTUAL</b></div>
           <div class="status-line"><i class="warn"></i><span>Gateway y JWT de CORE</span><b>PENDIENTE</b></div>
           <div class="status-line"><i class="warn"></i><span>Sincronización Backoffice</span><b>PENDIENTE</b></div>
         </div>
@@ -53,6 +54,7 @@
       <span><b>API actual</b> /api/**</span>
       <span><b>Destino público</b> /api/v1/academic/**</span>
       <span><b>Seguridad actual</b> JSESSIONID</span>
+      <span><b>Errores</b> application/problem+json</span>
     </section>
 
     <section id="arquitectura" class="section-shell section-block">
@@ -124,7 +126,7 @@
             <li><b>Entrada pública:</b> <code>/api/v1/academic/*</code></li>
             <li><b>Identidad:</b> UUID en <code>sub</code> / <code>X-User-Id</code></li>
             <li><b>Auth:</b> Bearer JWT RS256; validar <code>iss</code>, <code>aud</code>, <code>exp</code></li>
-            <li><b>Pendiente:</b> nombre exacto del permiso administrativo académico</li>
+            <li><b>Pendiente:</b> mapeo de rutas, JWKS, permisos y credenciales de servicio</li>
           </ul>
         </article>
         <article class="integration-card backoffice-card reveal">
@@ -141,21 +143,24 @@
         <article class="integration-card analytics-card reveal">
           <div class="card-top"><span class="system-icon">A</span><span class="badge partial">Parcial</span></div>
           <h3>Eventos y Analítica</h3>
-          <p>El backend emite resultados después del commit, pero el transporte aún no sigue el contrato CORE.</p>
+          <p>El publicador opcional actual es legado; los eventos de CORE todavía requieren schemas y topología aprobados.</p>
           <ul>
             <li><b>Actual:</b> evento local <code>resultado.publicado</code></li>
             <li><b>Estado:</b> Rabbit opcional, deshabilitado por defecto</li>
-            <li><b>Brecha:</b> envelope, eventType e idempotencia CORE</li>
+            <li><b>Consumir:</b> asistencia y resultados publicados por Docencia</li>
+            <li><b>Publicar:</b> exámenes programados y períodos académicos</li>
             <li><b>Regla:</b> no declarar exchange, queue ni binding desde el módulo</li>
           </ul>
         </article>
       </div>
 
       <div class="decision-panel reveal">
-        <div><p class="eyebrow">DECISIONES ABIERTAS</p><h3>Dos respuestas externas antes de integrar</h3></div>
+        <div><p class="eyebrow">DECISIONES ABIERTAS</p><h3>Cuatro acuerdos externos antes de integrar</h3></div>
         <ol>
-          <li><span>01</span><div><strong>Permiso académico de CORE</strong><p>Confirmar el string exacto en <code>roles</code> o <code>permissions</code> para operaciones administrativas.</p></div></li>
-          <li><span>02</span><div><strong>Ruta interna de Backoffice</strong><p>Confirmar el equivalente `/internal/v1` para sites y locations usando token de servicio.</p></div></li>
+          <li><span>01</span><div><strong>Mapeo del gateway</strong><p>Definir cómo <code>/api/v1/academic/*</code> llegará a las rutas actuales <code>/api/*</code>.</p></div></li>
+          <li><span>02</span><div><strong>JWT y service account</strong><p>Recibir JWKS, issuer, audience, roles, permisos, clientId, secret y scopes.</p></div></li>
+          <li><span>03</span><div><strong>Contratos de eventos</strong><p>Aprobar schemas, AsyncAPI y la cola propia para asistencia y resultados de Docencia.</p></div></li>
+          <li><span>04</span><div><strong>Ruta interna de Backoffice</strong><p>Confirmar endpoints paginados de sites y locations con token de servicio.</p></div></li>
         </ol>
       </div>
     </section>
@@ -164,11 +169,12 @@
       <div>
         <p class="eyebrow">FUENTES AUDITADAS</p>
         <h2>El mapa apunta al código, no lo reemplaza.</h2>
-        <p>Para detalles de payloads y ejemplos completos consultá el contrato Markdown, el README y la documentación de Backoffice.</p>
+        <p>Para payloads, pedidos y ejemplos completos consultá los contratos Markdown y la guía de integración.</p>
       </div>
       <div class="source-links">
         <a href="../CONTRATO_PORTALES_ALUMNOS_Y_DOCENCIA.md">Contrato API <span>↗</span></a>
         <a href="../INTEGRACION_BACKOFFICE.md">Integración Backoffice <span>↗</span></a>
+        <a href="../INTEGRACION_CORE.md">Pedidos a CORE <span>↗</span></a>
         <a href="../../README.md">README backend <span>↗</span></a>
         <a href="../../../../Frontend/README.md">README frontend <span>↗</span></a>
       </div>

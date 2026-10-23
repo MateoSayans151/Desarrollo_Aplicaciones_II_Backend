@@ -7,8 +7,8 @@ import java.time.LocalDate;
 import java.time.Instant;
 
 /**
- * Contrato de integración para notificar la publicación de un resultado.
- * La aplicación todavía no publica este evento en un broker ni por SSE/WebSocket.
+ * Contrato legado del publicador Rabbit opcional de Analítica.
+ * Todavía debe reemplazarse por el envelope y los eventType definidos por CORE.
  */
 public record EventoNotificacionDto(
         String eventId,

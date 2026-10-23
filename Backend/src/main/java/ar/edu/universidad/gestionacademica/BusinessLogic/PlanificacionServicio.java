@@ -62,7 +62,16 @@ public class PlanificacionServicio {
     }
     @Transactional(readOnly = true)
     public List<AsignacionRespuestaDto> agendaAula(Long aulaId, LocalDate fecha) {
-        return asignaciones.findByAulaIdAndFechaOrderByHoraInicio(aulaId, fecha).stream().map(this::asignacion).toList();
+        validarAulaExistente(aulaId);
+        return asignaciones.findByAulaIdAndFechaOrderByHoraInicio(aulaId, fecha).stream()
+                .map(this::asignacion).toList();
+    }
+    @Transactional(readOnly = true)
+    public List<AsignacionRespuestaDto> agendaAula(Long aulaId, LocalDate desde, LocalDate hasta) {
+        validarAulaExistente(aulaId);
+        validarRangoAgenda(desde, hasta);
+        return asignaciones.findByAulaIdAndFechaBetweenOrderByFechaAscHoraInicioAsc(
+                aulaId, desde, hasta).stream().map(this::asignacion).toList();
     }
     @Transactional(readOnly = true)
     public List<AsignacionRespuestaDto> listarAsignaciones() {
@@ -73,9 +82,7 @@ public class PlanificacionServicio {
         if (!asignaturas.existsById(asignaturaId)) {
             throw new RecursoNoEncontradoException("Asignatura no encontrada");
         }
-        if (hasta.isBefore(desde)) {
-            throw new ReglaNegocioException("La fecha de fin debe ser igual o posterior a la de inicio");
-        }
+        validarRangoAgenda(desde, hasta);
         return asignaciones.findByAsignaturaIdAndFechaBetweenOrderByFechaAscHoraInicioAsc(
                 asignaturaId, desde, hasta).stream().map(this::asignacion).toList();
     }
@@ -107,6 +114,16 @@ public class PlanificacionServicio {
 
     private void validarRango(LocalDate inicio, LocalDate fin, String nombre) {
         if (!fin.isAfter(inicio)) throw new ReglaNegocioException("El fin de " + nombre + " debe ser posterior al inicio");
+    }
+    private void validarRangoAgenda(LocalDate desde, LocalDate hasta) {
+        if (hasta.isBefore(desde)) {
+            throw new ReglaNegocioException("La fecha de fin debe ser igual o posterior a la de inicio");
+        }
+    }
+    private void validarAulaExistente(Long aulaId) {
+        if (!aulas.existsById(aulaId)) {
+            throw new RecursoNoEncontradoException("Aula no encontrada");
+        }
     }
     private SedeRespuestaDto sede(Sede s) {
         return new SedeRespuestaDto(s.getId(), s.getNombre(), s.getDireccion(), s.getBackofficeSiteId(),

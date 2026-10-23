@@ -93,4 +93,31 @@ class PlanificacionServicioTest {
                 .isInstanceOf(ReglaNegocioException.class);
         verifyNoInteractions(asignaciones);
     }
+
+    @Test
+    void devuelveLaAgendaDeUnAulaParaUnRangoDeFechas() {
+        var aula = Aula.builder().id(4L).build();
+        var asignatura = Asignatura.builder().id(8L).build();
+        var desde = LocalDate.of(2026, 10, 1);
+        var hasta = LocalDate.of(2026, 10, 31);
+        var asignacion = AsignacionAula.builder().id(12L).aula(aula).asignatura(asignatura)
+                .fecha(LocalDate.of(2026, 10, 21)).horaInicio(LocalTime.of(9, 0))
+                .horaFin(LocalTime.of(11, 0)).cantidadEstudiantes(30).build();
+        when(aulas.existsById(4L)).thenReturn(true);
+        when(asignaciones.findByAulaIdAndFechaBetweenOrderByFechaAscHoraInicioAsc(4L, desde, hasta))
+                .thenReturn(List.of(asignacion));
+
+        assertThat(servicio.agendaAula(4L, desde, hasta))
+                .extracting(PlanificacionDto.AsignacionRespuestaDto::id).containsExactly(12L);
+    }
+
+    @Test
+    void rechazaUnRangoInvertidoEnLaAgendaDelAula() {
+        var desde = LocalDate.of(2026, 10, 1);
+        when(aulas.existsById(4L)).thenReturn(true);
+
+        assertThatThrownBy(() -> servicio.agendaAula(4L, desde.plusDays(1), desde))
+                .isInstanceOf(ReglaNegocioException.class);
+        verifyNoInteractions(asignaciones);
+    }
 }
