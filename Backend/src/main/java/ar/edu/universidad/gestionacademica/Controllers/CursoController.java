@@ -25,6 +25,16 @@ public class CursoController {
     @GetMapping("/{cursoId}")
     public CursoDetalleAcademicoRespuestaDto detalle(@PathVariable Long cursoId) { return servicio.detalle(cursoId); }
 
+    @GetMapping("/{cursoId}/docentes")
+    public List<CursoDocenteRespuestaDto> listarDocentes(@PathVariable Long cursoId) {
+        return servicio.listarDocentes(cursoId);
+    }
+
+    @GetMapping("/{cursoId}/alumnos")
+    public List<InscripcionCursoRespuestaDto> listarAlumnos(@PathVariable Long cursoId) {
+        return servicio.listarAlumnos(cursoId);
+    }
+
     @PutMapping("/{cursoId}/estado")
     public CursoRespuestaDto actualizarEstado(@PathVariable Long cursoId,
                                               @Valid @RequestBody ActualizarEstadoCursoDto dto) {

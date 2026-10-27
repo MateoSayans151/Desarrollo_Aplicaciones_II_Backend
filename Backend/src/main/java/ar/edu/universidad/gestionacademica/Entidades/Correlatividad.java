@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "correlatividades", uniqueConstraints = @UniqueConstraint(columnNames = {"asignatura_id", "correlativa_id", "tipo"}))
+@Table(name = "correlatividades", uniqueConstraints = @UniqueConstraint(columnNames = {"asignatura_id", "correlativa_id"}))
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Correlatividad {
     public enum Tipo { REGULAR, APROBADA }

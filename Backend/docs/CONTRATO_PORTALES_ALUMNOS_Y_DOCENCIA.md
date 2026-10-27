@@ -95,6 +95,8 @@ se expande en una ocurrencia por semana dentro de sus fechas de inicio y fin.
 | `POST` | `/api/planificacion/cursos` | Crear curso/comisión. |
 | `GET` | `/api/planificacion/cursos?periodoId={id}` | Listar cursos; filtro de período opcional. |
 | `GET` | `/api/planificacion/cursos/{cursoId}` | Obtener curso con docentes e inscripciones. |
+| `GET` | `/api/planificacion/cursos/{cursoId}/docentes` | Listar docentes asignados al curso. |
+| `GET` | `/api/planificacion/cursos/{cursoId}/alumnos` | Listar alumnos inscriptos y su estado académico. |
 | `PUT` | `/api/planificacion/cursos/{cursoId}/estado` | Cambiar estado del curso. |
 | `PUT` | `/api/planificacion/cursos/{cursoId}/horario` | Cambiar día, aula y rango horario. |
 | `POST` | `/api/planificacion/cursos/{cursoId}/docentes` | Asignar docente externo y rol. |
@@ -154,7 +156,9 @@ Salvo health, Swagger y login, la configuración actual exige
 - Códigos nuevos de carrera, plan, asignatura y curso: formato `ARQ-001` o
   `ARQ1-001`.
 - Correlatividades: una asignatura no puede ser correlativa de sí misma y ambas deben
-  pertenecer al mismo plan.
+  pertenecer al mismo plan. Una materia sólo puede configurarse una vez como correlativa
+  de otra; repetirla con el mismo tipo o con un tipo distinto responde HTTP 400 con
+  `BUSINESS_RULE_VIOLATION`.
 - Aulas: sólo ubicaciones de tipo `AULA` pueden asignarse; la cantidad de estudiantes o
   el cupo del curso no puede superar su capacidad.
 - Ocupación: no se permiten horarios superpuestos para la misma aula, tampoco entre
@@ -357,6 +361,20 @@ El curso incluye datos de asignatura y período de forma anidada, y los nombres 
 
 El DTO de detalle refleja los datos que devuelve el endpoint. Los identificadores de alumno y docente son referencias a los módulos propietarios de esas identidades; este servicio no replica sus datos personales.
 
+### Consultar docentes y alumnos de un curso
+
+La edición del curso puede consultar las dos colecciones sin ejecutar operaciones de alta o modificación:
+
+- `GET /api/planificacion/cursos/{cursoId}/docentes` devuelve una lista de objetos
+  `{ id, docenteId, rol }`, ordenada por el ID interno de la asignación.
+- `GET /api/planificacion/cursos/{cursoId}/alumnos` devuelve una lista de objetos
+  `{ id, alumnoId, fechaInscripcion, estado, notaFinal, fechaResultado }`, ordenada por
+  `alumnoId`.
+
+Ambas consultas responden `404` si el curso no existe. Las operaciones de escritura se
+mantienen disponibles para los módulos responsables, pero la pantalla de edición del
+frontend usa estas rutas sólo para mostrar docentes y alumnos.
+
 ### Crear un curso
 
 `POST /api/planificacion/cursos`
@@ -477,26 +495,37 @@ Para listar las inscripciones de un alumno se usa `GET /api/planificacion/alumno
 
 `GET /api/academica/asignaturas/{asignaturaId}/correlatividades`
 
-Devuelve las asignaturas que deben estar regularizadas o aprobadas para cursar la asignatura indicada:
+Recibe el identificador en la ruta y devuelve un único objeto con las condiciones que
+deben cumplir las materias correlativas. Las materias se agrupan por `tipo`:
 
 ```json
-[
-  {
-    "id": 5,
-    "asignaturaId": 15,
-    "correlativaId": 12,
-    "tipo": "APROBADA"
-  },
-  {
-    "id": 6,
-    "asignaturaId": 15,
-    "correlativaId": 13,
-    "tipo": "REGULAR"
-  }
-]
+{
+  "asignaturaId": 15,
+  "condiciones": [
+    {
+      "tipo": "REGULAR",
+      "materiasCorrelativas": [
+        { "id": 13, "codigo": "MAT-013", "nombre": "Matemática II" }
+      ]
+    },
+    {
+      "tipo": "APROBADA",
+      "materiasCorrelativas": [
+        { "id": 11, "codigo": "ALG-011", "nombre": "Álgebra" },
+        { "id": 12, "codigo": "PRG-012", "nombre": "Programación II" }
+      ]
+    }
+  ]
+}
 ```
 
-`APROBADA` requiere que la asignatura correlativa esté aprobada. `REGULAR` admite que esté regular o aprobada. El endpoint requiere `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN`, por lo que el Portal de Docencia puede consumirlo con sus credenciales actuales. La misma validación se ejecuta al crear una inscripción.
+Si la asignatura no tiene correlativas, `condiciones` es una lista vacía. Cada elemento
+de `materiasCorrelativas` contiene el `id`, `codigo` y `nombre` vigentes de la asignatura
+requerida, y la lista se ordena por `id`. `APROBADA` requiere que la asignatura
+correlativa esté aprobada; `REGULAR` admite que esté regular o aprobada. El endpoint
+requiere `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN`, por lo que el Portal de
+Docencia puede consumirlo con sus credenciales actuales. La misma validación se
+ejecuta al crear una inscripción.
 
 ## Calendario: turnos de examen
 

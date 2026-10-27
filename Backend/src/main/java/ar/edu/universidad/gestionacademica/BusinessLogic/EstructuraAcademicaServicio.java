@@ -4,9 +4,12 @@ import ar.edu.universidad.gestionacademica.Entidades.*;
 import ar.edu.universidad.gestionacademica.Excepciones.*;
 import ar.edu.universidad.gestionacademica.Repositorios.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 
 import static ar.edu.universidad.gestionacademica.Modelos.EstructuraAcademicaDto.*;
@@ -84,15 +87,33 @@ public class EstructuraAcademicaServicio {
         if (!destino.getPlan().getId().equals(requerida.getPlan().getId())) {
             throw new ReglaNegocioException("Las asignaturas deben pertenecer al mismo plan de estudio");
         }
-        Correlatividad entidad = correlatividades.save(Correlatividad.builder().asignatura(destino)
-                .correlativa(requerida).tipo(dto.tipo()).build());
-        return correlatividad(entidad);
+        if (correlatividades.existsByAsignaturaIdAndCorrelativaId(asignaturaId, dto.correlativaId())) {
+            throw new ReglaNegocioException("La materia ya está configurada como correlativa para esta asignatura");
+        }
+        try {
+            Correlatividad entidad = correlatividades.saveAndFlush(Correlatividad.builder().asignatura(destino)
+                    .correlativa(requerida).tipo(dto.tipo()).build());
+            return correlatividad(entidad);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ReglaNegocioException("La materia ya está configurada como correlativa para esta asignatura");
+        }
     }
 
     @Transactional(readOnly = true)
-    public List<CorrelatividadRespuestaDto> listarCorrelatividades(Long asignaturaId) {
-        buscarAsignatura(asignaturaId);
-        return correlatividades.findByAsignaturaId(asignaturaId).stream().map(this::correlatividad).toList();
+    public CondicionesRegularidadRespuestaDto listarCorrelatividades(Long asignaturaId) {
+        Asignatura asignatura = buscarAsignatura(asignaturaId);
+        List<Correlatividad> requisitos = correlatividades.findByAsignaturaId(asignaturaId);
+        List<CondicionCorrelatividadDto> condiciones = Arrays.stream(Correlatividad.Tipo.values())
+                .map(tipo -> new CondicionCorrelatividadDto(tipo, requisitos.stream()
+                        .filter(requisito -> requisito.getTipo() == tipo)
+                        .map(Correlatividad::getCorrelativa)
+                        .map(correlativa -> new MateriaCorrelativaDto(correlativa.getId(),
+                                correlativa.getCodigo(), correlativa.getNombre()))
+                        .sorted(Comparator.comparing(MateriaCorrelativaDto::id))
+                        .toList()))
+                .filter(condicion -> !condicion.materiasCorrelativas().isEmpty())
+                .toList();
+        return new CondicionesRegularidadRespuestaDto(asignatura.getId(), condiciones);
     }
 
     private Carrera buscarCarrera(Long id) {

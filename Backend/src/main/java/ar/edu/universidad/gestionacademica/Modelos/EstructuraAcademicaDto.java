@@ -5,6 +5,7 @@ import ar.edu.universidad.gestionacademica.Entidades.EstadoAcademico;
 import jakarta.validation.constraints.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public final class EstructuraAcademicaDto {
     private EstructuraAcademicaDto() { }
@@ -43,4 +44,9 @@ public final class EstructuraAcademicaDto {
                                          @NotNull Correlatividad.Tipo tipo) { }
     public record CorrelatividadRespuestaDto(Long id, Long asignaturaId, Long correlativaId,
                                              Correlatividad.Tipo tipo) { }
+    public record MateriaCorrelativaDto(Long id, String codigo, String nombre) { }
+    public record CondicionCorrelatividadDto(Correlatividad.Tipo tipo,
+                                             List<MateriaCorrelativaDto> materiasCorrelativas) { }
+    public record CondicionesRegularidadRespuestaDto(Long asignaturaId,
+                                                      List<CondicionCorrelatividadDto> condiciones) { }
 }

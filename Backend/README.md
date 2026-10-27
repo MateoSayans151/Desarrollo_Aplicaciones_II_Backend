@@ -42,6 +42,10 @@ Los códigos nuevos de carreras, planes, asignaturas y cursos usan el formato
 `ARQ-001` o `ARQ1-001` (`^[A-Z]{3}[0-9]?-[0-9]{3}$`). La API rechaza con HTTP 400
 los códigos que no respetan este contrato.
 
+Una materia sólo puede configurarse una vez como correlativa de otra. Los intentos de
+repetirla con el mismo tipo o con un tipo diferente responden HTTP 400 como regla de
+negocio, en lugar de propagar un error de persistencia.
+
 Al crear un aula con `POST /api/planificacion/sedes/{id}/aulas`, se puede enviar
 `nombre` además de `codigo` y `capacidadMaxima`. Si se omite, se utiliza su código.
 Las sedes ya tienen nombre. La base existente no necesita migración para exponerlos
@@ -130,7 +134,7 @@ reemplazar la autenticación en memoria por OAuth2/SSO de la universidad.
 | POST / GET | `/api/academica/carreras/{id}/planes` | Crear/listar planes |
 | GET | `/api/academica/planes/{id}/pdf` | Descargar el plan de estudios (con asignaturas y correlatividades) en PDF |
 | POST / GET | `/api/academica/planes/{id}/asignaturas` | Crear/listar asignaturas |
-| POST / GET | `/api/academica/asignaturas/{id}/correlatividades` | Gestionar correlativas |
+| POST / GET | `/api/academica/asignaturas/{id}/correlatividades` | Crear correlativas y consultar condiciones agrupadas por tipo; cada materia incluye ID, código y nombre |
 | POST / GET | `/api/planificacion/sedes` | Crear/listar sedes |
 | POST / GET | `/api/planificacion/sedes/{id}/aulas` | Crear/listar aulas; nombre opcional al crear |
 | POST / GET | `/api/planificacion/asignaciones` | Crear/listar asignaciones de aulas |
@@ -140,6 +144,8 @@ reemplazar la autenticación en memoria por OAuth2/SSO de la universidad.
 | POST / GET | `/api/planificacion/periodos` | Crear/listar cuatrimestres |
 | POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Las respuestas incluyen `sedeNombre` y `aulaNombre`. Al crear requiere turno, horas, `diaSemana` y `aulaId`. |
 | GET | `/api/planificacion/cursos/{id}` | Consultar curso, docentes e inscripciones |
+| GET | `/api/planificacion/cursos/{id}/docentes` | Listar docentes asignados al curso |
+| GET | `/api/planificacion/cursos/{id}/alumnos` | Listar alumnos inscriptos y sus resultados |
 | PUT | `/api/planificacion/cursos/{id}/estado` | Actualizar estado del curso |
 | POST | `/api/planificacion/cursos/{id}/docentes` | Asignar docente externo al curso |
 | POST | `/api/planificacion/cursos/{id}/inscripciones` | Inscribir alumno |

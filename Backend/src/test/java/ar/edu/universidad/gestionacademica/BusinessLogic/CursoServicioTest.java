@@ -131,6 +131,30 @@ class CursoServicioTest {
     }
 
     @Test
+    void listaDocentesYAlumnosDelCurso() {
+        Curso curso = Curso.builder().id(42L).build();
+        when(cursos.findById(42L)).thenReturn(Optional.of(curso));
+        when(cursoDocentes.findByCursoIdOrderById(42L)).thenReturn(List.of(
+                CursoDocente.builder().id(3L).docenteId("docente-12").rol(RolDocenteCurso.TITULAR).build()));
+        when(inscripciones.findByCursoIdOrderByAlumnoId(42L)).thenReturn(List.of(
+                InscripcionCurso.builder().id(7L).alumnoId("alumno-456")
+                        .fechaInscripcion(LocalDate.of(2026, 7, 15))
+                        .estado(EstadoInscripcionCurso.CURSANDO).build()));
+
+        var docentes = servicio.listarDocentes(42L);
+        var alumnos = servicio.listarAlumnos(42L);
+
+        assertThat(docentes).singleElement().satisfies(docente -> {
+            assertThat(docente.docenteId()).isEqualTo("docente-12");
+            assertThat(docente.rol()).isEqualTo(RolDocenteCurso.TITULAR);
+        });
+        assertThat(alumnos).singleElement().satisfies(alumno -> {
+            assertThat(alumno.alumnoId()).isEqualTo("alumno-456");
+            assertThat(alumno.estado()).isEqualTo(EstadoInscripcionCurso.CURSANDO);
+        });
+    }
+
+    @Test
     void listaLasInscripcionesDeUnAlumnoConCursoAsignaturaYPeriodo() {
         Asignatura asignatura = Asignatura.builder().id(15L).codigo("DDA2")
                 .nombre("Desarrollo de Aplicaciones II").build();

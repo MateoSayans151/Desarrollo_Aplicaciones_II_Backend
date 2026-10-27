@@ -64,7 +64,7 @@ public class EstructuraAcademicaController {
         return servicio.agregarCorrelatividad(asignaturaId, dto);
     }
     @GetMapping("/asignaturas/{asignaturaId}/correlatividades")
-    public List<CorrelatividadRespuestaDto> correlatividades(@PathVariable Long asignaturaId) {
+    public CondicionesRegularidadRespuestaDto correlatividades(@PathVariable Long asignaturaId) {
         return servicio.listarCorrelatividades(asignaturaId);
     }
 }

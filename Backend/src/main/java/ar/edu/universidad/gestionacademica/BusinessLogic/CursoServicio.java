@@ -68,6 +68,18 @@ public class CursoServicio {
     }
 
     @Transactional(readOnly = true)
+    public List<CursoDocenteRespuestaDto> listarDocentes(Long cursoId) {
+        buscarCurso(cursoId);
+        return cursoDocentes.findByCursoIdOrderById(cursoId).stream().map(this::respuesta).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<InscripcionCursoRespuestaDto> listarAlumnos(Long cursoId) {
+        buscarCurso(cursoId);
+        return inscripciones.findByCursoIdOrderByAlumnoId(cursoId).stream().map(this::respuesta).toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<InscripcionAlumnoRespuestaDto> listarInscripcionesAlumno(String alumnoId, Long periodoId) {
         String alumnoIdNormalizado = alumnoId.trim();
         List<InscripcionCurso> encontradas = periodoId == null
