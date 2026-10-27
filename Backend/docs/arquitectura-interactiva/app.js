@@ -109,7 +109,7 @@ const endpoints = [
   ["POST", "/api/planificacion/turnos-examen", "Calendario", "Crear turno de examen", "protected", "Nombre, fechas del turno y fechas de inscripción.", "Los rangos son coherentes y la inscripción cierra antes del turno."],
   ["GET", "/api/planificacion/turnos-examen", "Calendario", "Listar turnos", "protected", "Sin payload.", "Expone calendario de exámenes."],
 
-  ["POST", "/api/planificacion/cursos", "Cursos", "Crear curso", "protected", "Asignatura, período, aula, modalidad, cupo, fechas y horario.", "Valida referencias, rangos, cupo y disponibilidad del aula."],
+  ["POST", "/api/planificacion/cursos", "Cursos", "Crear curso", "protected", "Asignatura, período, aula, modalidad, cupo, fechas, horario y mínimos de regularidad.", "Crea el curso y su configuración de regularidad en una transacción."],
   ["GET", "/api/planificacion/cursos", "Cursos", "Listar cursos", "protected", "periodoId opcional.", "Permite filtrar la oferta por período."],
   ["GET", "/api/planificacion/cursos/{cursoId}", "Cursos", "Consultar curso", "protected", "Identificador de curso.", "Incluye configuración de la cursada."],
   ["PUT", "/api/planificacion/cursos/{cursoId}/estado", "Cursos", "Cambiar estado", "protected", "Nuevo EstadoCurso.", "Sólo acepta estados del contrato."],
@@ -121,7 +121,8 @@ const endpoints = [
   ["GET", "/api/planificacion/cursos/{cursoId}/notas", "Resultados", "Listar notas", "protected", "Identificador de curso.", "Incluye resultados registrados del curso."],
   ["GET", "/api/planificacion/cursos/{cursoId}/notas/{alumnoId}", "Resultados", "Consultar nota", "protected", "Curso y alumno.", "Requiere vínculo de inscripción."],
   ["PUT", "/api/planificacion/cursos/{cursoId}/notas/{alumnoId}", "Resultados", "Publicar nota", "protected", "Nota 0–10 y estado final.", "Persiste atómicamente y emite evento después del commit."],
-  ["POST", "/api/regularidad/validar", "Regularidad", "Validar condición", "protected", "alumnoId, cursoId, asistencia, promedio y mínimos.", "Exige inscripción activa, identifica curso y materia y comprueba correlativas aprobadas; no persiste el resultado."]
+  ["GET", "/api/regularidad/cursos/{cursoId}", "Regularidad", "Consultar condiciones", "protected", "Sólo el identificador del curso.", "Devuelve código, asistencia mínima y promedio mínimo; no solicita alumno."],
+  ["PUT", "/api/regularidad/cursos/{cursoId}", "Regularidad", "Editar condiciones", "protected", "asistenciaMinima y promedioMinimo.", "Actualiza los mínimos persistidos del curso con validación de rangos."]
 ];
 
 const rules = [
@@ -135,7 +136,7 @@ const rules = [
   ["Estados cerrados", "Carreras, cursos e inscripciones usan enums explícitos; el cliente no debe inventar strings."],
   ["Resultados atómicos", "La nota va de 0 a 10, se guarda con el estado final y el evento se publica sólo después del commit."],
   ["Duración derivada", "La carrera no recibe duración manual: cada bloque de cinco materias suma un cuatrimestre y las fracciones se redondean al cuatrimestre necesario."],
-  ["Regularidad contextual", "La validación identifica alumno, curso y materia, exige inscripción activa y correlativas aprobadas para habilitar el final."],
+  ["Regularidad por curso", "Cada curso persiste asistencia y promedio mínimos. Las correlativas siguen siendo propiedad de la asignatura y se consultan en su endpoint."],
   ["Responsabilidad de datos", "Academic conserva claves locales; UUID de personas, sites y locations pertenecen a CORE o Backoffice."]
 ];
 

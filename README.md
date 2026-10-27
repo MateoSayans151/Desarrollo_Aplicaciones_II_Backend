@@ -6,5 +6,6 @@ integración con CORE y los pedidos pendientes están en
 
 El contrato vigente incluye la consulta de condiciones de correlatividad agrupadas por
 tipo, con ID, código y nombre de cada materia requerida, y los listados de docentes y
-alumnos por curso. Los ejemplos completos están en
+alumnos por curso. También incluye condiciones de regularidad persistidas por curso,
+consultables sin identificar a un alumno. Los ejemplos completos están en
 [`Backend/docs/CONTRATO_PORTALES_ALUMNOS_Y_DOCENCIA.md`](Backend/docs/CONTRATO_PORTALES_ALUMNOS_Y_DOCENCIA.md).

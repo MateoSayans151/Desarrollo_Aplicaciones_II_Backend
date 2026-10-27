@@ -191,4 +191,9 @@ WHERE NOT EXISTS (
     SELECT 1 FROM turnos_examen WHERE nombre = 'Turno final de prueba - cerrado'
 );
 
+INSERT INTO regularidades_curso (curso_id, codigo, asistencia_minima, promedio_minimo)
+SELECT c.id, c.codigo, 75.00, 6.00
+FROM cursos c
+WHERE NOT EXISTS (SELECT 1 FROM regularidades_curso r WHERE r.curso_id = c.id);
+
 COMMIT;

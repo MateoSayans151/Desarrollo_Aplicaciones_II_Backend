@@ -48,6 +48,11 @@ Agrega `dia_semana` y `aula_id` a `cursos`, traslada el único horario existente
 de cada curso y elimina `horarios_curso`. Si algún curso tiene más de un horario,
 la migración se detiene sin modificar los datos.
 
+Luego aplicar `docker/migrations/06-regularidad-por-curso.sql`. Crea
+`regularidades_curso`, vinculada de forma única a `cursos`, y genera una configuración
+de 75% de asistencia mínima y promedio 6.0 para cada curso que todavía no tenga una.
+La migración es idempotente y también sincroniza el código almacenado con el del curso.
+
 ### Cambios de esquema
 
 El período académico ahora incluye `inscripcionDesde` e `inscripcionHasta`.

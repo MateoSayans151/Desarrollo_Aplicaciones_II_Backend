@@ -1,58 +1,51 @@
 package ar.edu.universidad.gestionacademica.BusinessLogic;
 
-import ar.edu.universidad.gestionacademica.Entidades.Correlatividad;
 import ar.edu.universidad.gestionacademica.Entidades.Curso;
-import ar.edu.universidad.gestionacademica.Entidades.EstadoInscripcionCurso;
-import ar.edu.universidad.gestionacademica.Entidades.InscripcionCurso;
+import ar.edu.universidad.gestionacademica.Entidades.RegularidadCurso;
 import ar.edu.universidad.gestionacademica.Excepciones.RecursoNoEncontradoException;
-import ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException;
-import ar.edu.universidad.gestionacademica.Repositorios.CorrelatividadRepositorio;
 import ar.edu.universidad.gestionacademica.Repositorios.CursoRepositorio;
-import ar.edu.universidad.gestionacademica.Repositorios.InscripcionCursoRepositorio;
+import ar.edu.universidad.gestionacademica.Repositorios.RegularidadCursoRepositorio;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Set;
+import java.math.BigDecimal;
 
 import static ar.edu.universidad.gestionacademica.Modelos.RegularidadDto.*;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
+@Transactional
 public class RegularidadServicio {
     private final CursoRepositorio cursos;
-    private final InscripcionCursoRepositorio inscripciones;
-    private final CorrelatividadRepositorio correlatividades;
+    private final RegularidadCursoRepositorio regularidades;
 
-    public ResultadoRegularidadDto validar(ValidarRegularidadDto datos) {
-        String alumnoId = datos.alumnoId().trim();
-        Curso curso = cursos.findById(datos.cursoId())
+    public CondicionesRegularidadCursoDto consultar(Long cursoId) {
+        Curso curso = cursos.findById(cursoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Curso no encontrado"));
-        InscripcionCurso inscripcion = inscripciones.findByCursoIdAndAlumnoId(curso.getId(), alumnoId)
-                .orElseThrow(() -> new ReglaNegocioException("El alumno no está inscripto en el curso indicado"));
-        if (inscripcion.getEstado() == EstadoInscripcionCurso.BAJA) {
-            throw new ReglaNegocioException("La inscripción del alumno en el curso está dada de baja");
-        }
+        RegularidadCurso regularidad = regularidades.findByCursoId(cursoId)
+                .orElseGet(() -> regularidades.save(RegularidadCurso.builder()
+                        .curso(curso)
+                        .codigo(curso.getCodigo())
+                        .asistenciaMinima(new BigDecimal("75.00"))
+                        .promedioMinimo(new BigDecimal("6.00"))
+                        .build()));
+        return respuesta(regularidad);
+    }
 
-        var motivos = new ArrayList<String>();
-        if (datos.asistencia() < datos.asistenciaMinima()) motivos.add("No alcanza la asistencia mínima");
-        if (datos.promedio() < datos.promedioMinimo()) motivos.add("No alcanza el promedio mínimo");
-        boolean regular = motivos.isEmpty();
+    public CondicionesRegularidadCursoDto actualizar(Long cursoId, GuardarCondicionesRegularidadDto datos) {
+        Curso curso = cursos.findById(cursoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Curso no encontrado"));
+        RegularidadCurso regularidad = regularidades.findByCursoId(cursoId)
+                .orElseGet(() -> RegularidadCurso.builder().curso(curso).codigo(curso.getCodigo()).build());
+        regularidad.setCodigo(curso.getCodigo());
+        regularidad.setAsistenciaMinima(datos.asistenciaMinima());
+        regularidad.setPromedioMinimo(datos.promedioMinimo());
+        return respuesta(regularidades.save(regularidad));
+    }
 
-        for (Correlatividad correlatividad : correlatividades.findByAsignaturaId(curso.getAsignatura().getId())) {
-            boolean aprobada = inscripciones.existsByAlumnoIdAndCursoAsignaturaIdAndEstadoIn(
-                    alumnoId, correlatividad.getCorrelativa().getId(), Set.of(EstadoInscripcionCurso.APROBADO));
-            if (!aprobada) {
-                motivos.add("No tiene aprobada la correlativa " + correlatividad.getCorrelativa().getCodigo()
-                        + " · " + correlatividad.getCorrelativa().getNombre());
-            }
-        }
-
-        boolean habilitadoParaFinal = regular && motivos.isEmpty();
-        return new ResultadoRegularidadDto(regular, habilitadoParaFinal, motivos, alumnoId,
-                curso.getId(), curso.getCodigo(), curso.getAsignatura().getId(),
-                curso.getAsignatura().getCodigo(), curso.getAsignatura().getNombre());
+    private CondicionesRegularidadCursoDto respuesta(RegularidadCurso regularidad) {
+        return new CondicionesRegularidadCursoDto(regularidad.getId(), regularidad.getCurso().getId(),
+                regularidad.getCodigo(), regularidad.getAsistenciaMinima(), regularidad.getPromedioMinimo());
     }
 }

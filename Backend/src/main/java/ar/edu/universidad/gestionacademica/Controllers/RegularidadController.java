@@ -13,8 +13,14 @@ import static ar.edu.universidad.gestionacademica.Modelos.RegularidadDto.*;
 public class RegularidadController {
     private final RegularidadServicio servicio;
 
-    @PostMapping("/validar")
-    public ResultadoRegularidadDto validar(@Valid @RequestBody ValidarRegularidadDto datos) {
-        return servicio.validar(datos);
+    @GetMapping("/cursos/{cursoId}")
+    public CondicionesRegularidadCursoDto consultar(@PathVariable Long cursoId) {
+        return servicio.consultar(cursoId);
+    }
+
+    @PutMapping("/cursos/{cursoId}")
+    public CondicionesRegularidadCursoDto actualizar(@PathVariable Long cursoId,
+                                                      @Valid @RequestBody GuardarCondicionesRegularidadDto datos) {
+        return servicio.actualizar(cursoId, datos);
     }
 }

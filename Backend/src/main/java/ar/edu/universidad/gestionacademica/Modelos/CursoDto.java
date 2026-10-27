@@ -26,7 +26,9 @@ public final class CursoDto {
             @NotNull LocalTime horaInicio,
             @NotNull LocalTime horaFin,
             @NotNull DayOfWeek diaSemana,
-            @NotNull Long aulaId) { }
+            @NotNull Long aulaId,
+            @NotNull @DecimalMin("0.0") @DecimalMax("100.0") BigDecimal asistenciaMinima,
+            @NotNull @DecimalMin("0.0") @DecimalMax("10.0") BigDecimal promedioMinimo) { }
 
     public record CursoRespuestaDto(Long id, String codigo, Long asignaturaId, Long periodoId, Long sedeId,
                                     ModalidadCurso modalidad, EstadoCurso estado, int cupoMaximo,

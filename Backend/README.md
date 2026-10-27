@@ -67,7 +67,7 @@ en las respuestas de cursos.
 - Sedes, aulas, capacidad, agenda y detección de superposición horaria.
 - Cuatrimestres y turnos de examen final.
 - Cursos/comisiones por cuatrimestre, con docentes, inscripciones y horarios de aula.
-- Validación de regularidad por curso y alumno, con inscripción y correlativas aprobadas.
+- Condiciones de regularidad persistidas por curso, consultables sin identificar alumnos.
 - Usuarios persistidos, login por sesión y autorización por permiso administrativo.
 
 ## Ejecución
@@ -142,7 +142,7 @@ reemplazar la autenticación en memoria por OAuth2/SSO de la universidad.
 | GET | `/api/planificacion/aulas/{id}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar cursos y asignaciones puntuales de un aula dentro de un rango inclusivo |
 | GET | `/api/planificacion/asignaturas/{id}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar horarios ocupados por una asignatura en el rango indicado |
 | POST / GET | `/api/planificacion/periodos` | Crear/listar cuatrimestres |
-| POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Las respuestas incluyen `sedeNombre` y `aulaNombre`. Al crear requiere turno, horas, `diaSemana` y `aulaId`. |
+| POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Al crear requiere horario, aula, `asistenciaMinima` y `promedioMinimo`. |
 | GET | `/api/planificacion/cursos/{id}` | Consultar curso, docentes e inscripciones |
 | GET | `/api/planificacion/cursos/{id}/docentes` | Listar docentes asignados al curso |
 | GET | `/api/planificacion/cursos/{id}/alumnos` | Listar alumnos inscriptos y sus resultados |
@@ -155,7 +155,8 @@ reemplazar la autenticación en memoria por OAuth2/SSO de la universidad.
 | GET / PUT | `/api/planificacion/cursos/{id}/notas/{alumnoId}` | Consultar o cargar la nota final de un alumno |
 | PUT | `/api/planificacion/cursos/{id}/horario` | Actualizar día, aula y horas del curso |
 | POST / GET | `/api/planificacion/turnos-examen` | Crear/listar turnos |
-| POST | `/api/regularidad/validar` | Validar habilitación a final |
+| GET | `/api/regularidad/cursos/{cursoId}` | Consultar los mínimos de regularidad del curso, sin datos de alumno |
+| PUT | `/api/regularidad/cursos/{cursoId}` | Crear o actualizar los mínimos de regularidad del curso |
 | POST | `/api/auth/login` | Iniciar sesión local |
 | POST | `/api/auth/logout` | Cerrar sesión local |
 | GET | `/api/auth/me` | Consultar usuario autenticado |
@@ -174,22 +175,25 @@ permiso `USUARIO` recibe HTTP 403.
 }
 ```
 
-### Ejemplo de validación de regularidad
+### Ejemplo de condiciones de regularidad
+
+`GET /api/regularidad/cursos/42` devuelve:
 
 ```json
 {
-  "alumnoId": "alumno-123",
+  "id": 7,
   "cursoId": 42,
-  "asistencia": 80,
-  "promedio": 7,
+  "codigo": "DDA2-001",
   "asistenciaMinima": 75,
   "promedioMinimo": 6
 }
 ```
 
-El alumno debe tener una inscripción activa en el curso. `regular` depende de la
-asistencia y el promedio; `habilitadoParaFinal` exige además todas las materias
-correlativas aprobadas.
+La consulta no recibe `alumnoId`, asistencia obtenida ni promedio obtenido. Las
+correlativas se consultan con
+`GET /api/academica/asignaturas/{asignaturaId}/correlatividades`. La migración
+`docker/migrations/06-regularidad-por-curso.sql` crea la tabla y completa con 75% y
+6.0 los cursos que todavía no tienen configuración.
 
 ## Pruebas
 

@@ -31,6 +31,7 @@ public class CursoServicio {
     private final CursoDocenteRepositorio cursoDocentes;
     private final InscripcionCursoRepositorio inscripciones;
     private final CorrelatividadRepositorio correlatividades;
+    private final RegularidadCursoRepositorio regularidades;
     private final ApplicationEventPublisher eventos;
 
     public CursoRespuestaDto crear(CrearCursoDto dto) {
@@ -50,6 +51,10 @@ public class CursoServicio {
                 .fechaInicio(dto.fechaInicio()).fechaFin(dto.fechaFin())
                 .turno(dto.turno()).horaInicio(dto.horaInicio()).horaFin(dto.horaFin())
                 .diaSemana(dto.diaSemana()).aula(aula).build());
+        regularidades.save(RegularidadCurso.builder()
+                .curso(curso).codigo(curso.getCodigo())
+                .asistenciaMinima(dto.asistenciaMinima()).promedioMinimo(dto.promedioMinimo())
+                .build());
         return respuesta(curso);
     }
 

@@ -111,7 +111,8 @@ se expande en una ocurrencia por semana dentro de sus fechas de inicio y fin.
 
 | Método | Ruta | Actividad |
 | --- | --- | --- |
-| `POST` | `/api/regularidad/validar` | Evalúa asistencia y promedio para un alumno y curso persistidos; exige inscripción activa y correlativas aprobadas para habilitar el final. |
+| `GET` | `/api/regularidad/cursos/{cursoId}` | Devuelve las condiciones de regularidad configuradas para un curso, sin recibir datos de alumno. |
+| `PUT` | `/api/regularidad/cursos/{cursoId}` | Crea o actualiza asistencia mínima y promedio mínimo del curso. |
 
 ## Catálogo de payloads de escritura
 
@@ -132,14 +133,14 @@ integración objetivo deberán transportar el UUID de CORE como texto.
 | Asignar aula | `{ "aulaId", "asignaturaId", "fecha", "horaInicio", "horaFin", "cantidadEstudiantes" }` | `201`; asignación persistida. |
 | Crear período | `{ "anio", "numero", "fechaInicio", "fechaFin", "inscripcionDesde", "inscripcionHasta" }` | `201`; período creado. `numero` admite 1 o 2. |
 | Crear turno de examen | `{ "nombre", "fechaInicio", "fechaFin", "inscripcionDesde", "inscripcionHasta" }` | `201`; turno creado. |
-| Crear curso | `{ "codigo", "asignaturaId", "periodoId", "sedeId", "modalidad", "cupoMaximo", "fechaInicio", "fechaFin", "turno", "horaInicio", "horaFin", "diaSemana", "aulaId" }` | `201`; curso con nombres de sede/aula e `inscriptosActivos`. |
+| Crear curso | `{ "codigo", "asignaturaId", "periodoId", "sedeId", "modalidad", "cupoMaximo", "fechaInicio", "fechaFin", "turno", "horaInicio", "horaFin", "diaSemana", "aulaId", "asistenciaMinima", "promedioMinimo" }` | `201`; crea el curso y sus condiciones de regularidad en una única transacción. |
 | Cambiar estado de curso | `{ "estado": "PLANIFICADO|EN_CURSO|FINALIZADO|CANCELADO" }` | `200`; curso actualizado. |
 | Cambiar horario de curso | `{ "aulaId", "diaSemana", "horaInicio", "horaFin" }` | `200`; curso actualizado después de revalidar aula y solapamiento. |
 | Asignar docente | `{ "docenteId", "rol": "TITULAR|ADJUNTO|AUXILIAR" }` | `201`; vínculo docente-curso. |
 | Inscribir alumno | `{ "alumnoId" }` | `201`; inscripción en estado `INSCRIPTO`. |
 | Cambiar inscripción | `{ "estado", "notaFinal"?, "fechaResultado"? }` | `200`; inscripción actualizada. Los campos opcionales pasan a ser obligatorios para un estado final. |
 | Cargar nota final | `{ "notaFinal", "estado": "APROBADO|DESAPROBADO", "fechaResultado"? }` | `200`; nota publicada. Si falta fecha se usa la fecha actual. |
-| Validar regularidad | `{ "alumnoId", "cursoId", "asistencia", "promedio", "asistenciaMinima", "promedioMinimo" }` | `200`; devuelve resultado y contexto del alumno, curso y asignatura. Requiere inscripción activa. |
+| Editar regularidad | `{ "asistenciaMinima", "promedioMinimo" }` | `200`; devuelve `{ id, cursoId, codigo, asistenciaMinima, promedioMinimo }`. |
 
 Las consultas devuelven listas de los DTO de respuesta anteriores. El detalle de curso
 devuelve `{ "curso", "docentes", "inscripciones" }`; el listado de inscripciones de un
@@ -176,8 +177,8 @@ Salvo health, Swagger y login, la configuración actual exige
   inscripción en `BAJA`.
 - Períodos y turnos: todo rango termina después de comenzar. La inscripción debe cerrar
   antes o el mismo día del inicio del período, y antes del inicio del turno de examen.
-- Regularidad: queda regular y habilitado para final únicamente cuando asistencia y
-  promedio alcanzan los mínimos recibidos.
+- Regularidad: la asistencia mínima debe estar entre 0 y 100 y el promedio mínimo
+  entre 0 y 10. Ambos valores pertenecen al curso y no a un alumno.
 
 Enums expuestos: `EstadoAcademico = ACTIVA | BORRADOR | INACTIVA`,
 `EstadoCurso = PLANIFICADO | EN_CURSO | FINALIZADO | CANCELADO`,
@@ -393,9 +394,29 @@ frontend usa estas rutas sólo para mostrar docentes y alumnos.
   "aulaId": 4,
   "cupoMaximo": 45,
   "fechaInicio": "2026-08-10",
-  "fechaFin": "2026-11-30"
+  "fechaFin": "2026-11-30",
+  "asistenciaMinima": 75,
+  "promedioMinimo": 6
 }
 ```
+
+### Consultar y editar condiciones de regularidad
+
+`GET /api/regularidad/cursos/{cursoId}` no recibe `alumnoId` y responde:
+
+```json
+{
+  "id": 7,
+  "cursoId": 42,
+  "codigo": "DDA2-001",
+  "asistenciaMinima": 75.00,
+  "promedioMinimo": 6.00
+}
+```
+
+`PUT /api/regularidad/cursos/{cursoId}` recibe solamente `asistenciaMinima` y
+`promedioMinimo`. Las correlativas no se duplican en esta tabla: se obtienen con el
+endpoint ya existente de correlatividades de la asignatura.
 
 ### Actualizar el único horario del curso
 
@@ -606,6 +627,7 @@ Los módulos pueden copiar estos modelos mínimos para desarrollar con datos loc
 | `InscripcionCurso` | `id: Long`, `cursoId: Long`, `alumnoId: String`, `fechaInscripcion: LocalDate`, `estado: EstadoInscripcionCurso`, `notaFinal: BigDecimal?`, `fechaResultado: LocalDate?` |
 | `Asignatura` | `id: Long`, `codigo: String`, `nombre: String`, `anio: int`, `creditos: int`, `cargaHoraria: int`, `estado: EstadoAcademico`, `planId: Long` |
 | `Correlatividad` | `id: Long`, `asignaturaId: Long`, `correlativaId: Long`, `tipo: Correlatividad.Tipo` |
+| `RegularidadCurso` | `id: Long`, `cursoId: Long` único, `codigo: String`, `asistenciaMinima: BigDecimal`, `promedioMinimo: BigDecimal` |
 | `PeriodoAcademico` | `id: Long`, `anio: int`, `numero: int`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `inscripcionDesde: LocalDate`, `inscripcionHasta: LocalDate` |
 | `TurnoExamen` | `id: Long`, `nombre: String`, `fechaInicio: LocalDate`, `fechaFin: LocalDate`, `inscripcionDesde: LocalDate`, `inscripcionHasta: LocalDate` |
 | `CursoDocente` | `id: Long`, `cursoId: Long`, `docenteId: String`, `rol: RolDocenteCurso` |

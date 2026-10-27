@@ -28,10 +28,11 @@ class CursoServicioTest {
     private final CursoDocenteRepositorio cursoDocentes = mock(CursoDocenteRepositorio.class);
     private final InscripcionCursoRepositorio inscripciones = mock(InscripcionCursoRepositorio.class);
     private final CorrelatividadRepositorio correlatividades = mock(CorrelatividadRepositorio.class);
+    private final RegularidadCursoRepositorio regularidades = mock(RegularidadCursoRepositorio.class);
     private final ApplicationEventPublisher eventos = mock(ApplicationEventPublisher.class);
 
     private final CursoServicio servicio = new CursoServicio(cursos, asignaturas, periodos, sedes, aulas,
-            asignaciones, cursoDocentes, inscripciones, correlatividades, eventos);
+            asignaciones, cursoDocentes, inscripciones, correlatividades, regularidades, eventos);
 
     @Test
     void crearCursoGuardaTurnoYHorasYRechazaUnRangoInvertido() {
@@ -49,7 +50,8 @@ class CursoServicioTest {
         });
         var dto = new CursoDto.CrearCursoDto("DDA2-A", 15L, 8L, 2L, ModalidadCurso.PRESENCIAL,
                 45, LocalDate.of(2026, 8, 10), LocalDate.of(2026, 11, 30),
-                TurnoCurso.TARDE, LocalTime.of(14, 0), LocalTime.of(18, 0), DayOfWeek.MONDAY, 3L);
+                TurnoCurso.TARDE, LocalTime.of(14, 0), LocalTime.of(18, 0), DayOfWeek.MONDAY, 3L,
+                new BigDecimal("75"), new BigDecimal("6"));
 
         var creado = servicio.crear(dto);
 
@@ -58,9 +60,15 @@ class CursoServicioTest {
         assertThat(creado.horaFin()).isEqualTo(LocalTime.of(18, 0));
         assertThat(creado.diaSemana()).isEqualTo(DayOfWeek.MONDAY);
         assertThat(creado.aulaId()).isEqualTo(3L);
+        var regularidadCaptor = org.mockito.ArgumentCaptor.forClass(RegularidadCurso.class);
+        verify(regularidades).save(regularidadCaptor.capture());
+        assertThat(regularidadCaptor.getValue().getCurso().getId()).isEqualTo(42L);
+        assertThat(regularidadCaptor.getValue().getAsistenciaMinima()).isEqualByComparingTo("75");
+        assertThat(regularidadCaptor.getValue().getPromedioMinimo()).isEqualByComparingTo("6");
         assertThatThrownBy(() -> servicio.crear(new CursoDto.CrearCursoDto("DDA2-B", 15L, 8L, 2L,
                 ModalidadCurso.PRESENCIAL, 45, LocalDate.of(2026, 8, 10), LocalDate.of(2026, 11, 30),
-                TurnoCurso.TARDE, LocalTime.of(18, 0), LocalTime.of(14, 0), DayOfWeek.MONDAY, 3L)))
+                TurnoCurso.TARDE, LocalTime.of(18, 0), LocalTime.of(14, 0), DayOfWeek.MONDAY, 3L,
+                new BigDecimal("75"), new BigDecimal("6"))))
                 .hasMessageContaining("hora de fin");
     }
 
@@ -78,7 +86,7 @@ class CursoServicioTest {
                 AsignacionAula.builder().fecha(LocalDate.of(2026, 8, 17)).build()));
         var dto = new CursoDto.CrearCursoDto("DDA2-A", 15L, 8L, 2L, ModalidadCurso.PRESENCIAL,
                 45, inicio, fin, TurnoCurso.TARDE, LocalTime.of(14, 0), LocalTime.of(18, 0),
-                DayOfWeek.MONDAY, 3L);
+                DayOfWeek.MONDAY, 3L, new BigDecimal("75"), new BigDecimal("6"));
 
         assertThatThrownBy(() -> servicio.crear(dto))
                 .isInstanceOf(ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException.class)

@@ -1,90 +1,71 @@
 package ar.edu.universidad.gestionacademica.BusinessLogic;
 
-import ar.edu.universidad.gestionacademica.Entidades.Asignatura;
-import ar.edu.universidad.gestionacademica.Entidades.Correlatividad;
 import ar.edu.universidad.gestionacademica.Entidades.Curso;
-import ar.edu.universidad.gestionacademica.Entidades.EstadoInscripcionCurso;
-import ar.edu.universidad.gestionacademica.Entidades.InscripcionCurso;
-import ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException;
-import ar.edu.universidad.gestionacademica.Repositorios.CorrelatividadRepositorio;
+import ar.edu.universidad.gestionacademica.Entidades.RegularidadCurso;
+import ar.edu.universidad.gestionacademica.Modelos.RegularidadDto.GuardarCondicionesRegularidadDto;
 import ar.edu.universidad.gestionacademica.Repositorios.CursoRepositorio;
-import ar.edu.universidad.gestionacademica.Repositorios.InscripcionCursoRepositorio;
-import org.junit.jupiter.api.BeforeEach;
+import ar.edu.universidad.gestionacademica.Repositorios.RegularidadCursoRepositorio;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
+import java.math.BigDecimal;
 import java.util.Optional;
 
-import static ar.edu.universidad.gestionacademica.Modelos.RegularidadDto.ValidarRegularidadDto;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class RegularidadServicioTest {
     private final CursoRepositorio cursos = mock(CursoRepositorio.class);
-    private final InscripcionCursoRepositorio inscripciones = mock(InscripcionCursoRepositorio.class);
-    private final CorrelatividadRepositorio correlatividades = mock(CorrelatividadRepositorio.class);
-    private final RegularidadServicio servicio = new RegularidadServicio(cursos, inscripciones, correlatividades);
-    private final Asignatura asignatura = Asignatura.builder()
-            .id(7L).codigo("INF-201").nombre("Programación II").build();
-    private final Curso curso = Curso.builder().id(3L).codigo("INF-201-A").asignatura(asignatura).build();
+    private final RegularidadCursoRepositorio regularidades = mock(RegularidadCursoRepositorio.class);
+    private final RegularidadServicio servicio = new RegularidadServicio(cursos, regularidades);
+    private final Curso curso = Curso.builder().id(3L).codigo("INF-201-A").build();
 
-    @BeforeEach
-    void prepararInscripcion() {
+    @Test
+    void consultaLasCondicionesSinSolicitarUnAlumno() {
+        RegularidadCurso configuracion = RegularidadCurso.builder().id(9L).curso(curso)
+                .codigo("INF-201-A").asistenciaMinima(new BigDecimal("75.00"))
+                .promedioMinimo(new BigDecimal("6.00")).build();
         when(cursos.findById(3L)).thenReturn(Optional.of(curso));
-        when(inscripciones.findByCursoIdAndAlumnoId(3L, "alu-1")).thenReturn(Optional.of(
-                InscripcionCurso.builder().curso(curso).alumnoId("alu-1")
-                        .estado(EstadoInscripcionCurso.CURSANDO).build()));
-        when(correlatividades.findByAsignaturaId(7L)).thenReturn(List.of());
+        when(regularidades.findByCursoId(3L)).thenReturn(Optional.of(configuracion));
+
+        var resultado = servicio.consultar(3L);
+
+        assertThat(resultado.cursoId()).isEqualTo(3L);
+        assertThat(resultado.codigo()).isEqualTo("INF-201-A");
+        assertThat(resultado.asistenciaMinima()).isEqualByComparingTo("75");
+        assertThat(resultado.promedioMinimo()).isEqualByComparingTo("6");
     }
 
     @Test
-    void habilitaCuandoEstaInscriptoYCumpleTodasLasCondiciones() {
-        var resultado = servicio.validar(new ValidarRegularidadDto("alu-1", 3L, 80, 7, 75, 6));
+    void actualizaUnaConfiguracionExistenteYMantieneElCodigoDelCurso() {
+        RegularidadCurso configuracion = RegularidadCurso.builder().id(9L).curso(curso)
+                .codigo("CODIGO-VIEJO").asistenciaMinima(new BigDecimal("75"))
+                .promedioMinimo(new BigDecimal("6")).build();
+        when(cursos.findById(3L)).thenReturn(Optional.of(curso));
+        when(regularidades.findByCursoId(3L)).thenReturn(Optional.of(configuracion));
+        when(regularidades.save(configuracion)).thenReturn(configuracion);
 
-        assertThat(resultado.regular()).isTrue();
-        assertThat(resultado.habilitadoParaFinal()).isTrue();
-        assertThat(resultado.asignaturaNombre()).isEqualTo("Programación II");
-        assertThat(resultado.cursoCodigo()).isEqualTo("INF-201-A");
+        var resultado = servicio.actualizar(3L,
+                new GuardarCondicionesRegularidadDto(new BigDecimal("80"), new BigDecimal("7")));
+
+        assertThat(resultado.codigo()).isEqualTo("INF-201-A");
+        assertThat(resultado.asistenciaMinima()).isEqualByComparingTo("80");
+        assertThat(resultado.promedioMinimo()).isEqualByComparingTo("7");
     }
 
     @Test
-    void informaTodasLasCondicionesAcademicasIncumplidas() {
-        var resultado = servicio.validar(new ValidarRegularidadDto("alu-1", 3L, 60, 4, 75, 6));
+    void creaValoresInicialesCuandoElCursoNoTieneConfiguracion() {
+        when(cursos.findById(3L)).thenReturn(Optional.of(curso));
+        when(regularidades.findByCursoId(3L)).thenReturn(Optional.empty());
+        when(regularidades.save(any(RegularidadCurso.class))).thenAnswer(invocation -> {
+            RegularidadCurso guardada = invocation.getArgument(0);
+            guardada.setId(10L);
+            return guardada;
+        });
 
-        assertThat(resultado.regular()).isFalse();
-        assertThat(resultado.habilitadoParaFinal()).isFalse();
-        assertThat(resultado.motivos()).hasSize(2);
-    }
+        var resultado = servicio.consultar(3L);
 
-    @Test
-    void exigeQueElAlumnoEsteInscriptoEnElCurso() {
-        when(inscripciones.findByCursoIdAndAlumnoId(3L, "alu-2")).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> servicio.validar(
-                new ValidarRegularidadDto("alu-2", 3L, 80, 7, 75, 6)))
-                .isInstanceOf(ReglaNegocioException.class)
-                .hasMessageContaining("no está inscripto");
-    }
-
-    @Test
-    void mantieneRegularidadPeroNoHabilitaSiFaltaUnaCorrelativaAprobada() {
-        Asignatura correlativa = Asignatura.builder()
-                .id(2L).codigo("INF-101").nombre("Programación I").build();
-        when(correlatividades.findByAsignaturaId(7L)).thenReturn(List.of(
-                Correlatividad.builder().asignatura(asignatura).correlativa(correlativa)
-                        .tipo(Correlatividad.Tipo.APROBADA).build()));
-        when(inscripciones.existsByAlumnoIdAndCursoAsignaturaIdAndEstadoIn(
-                eq("alu-1"), eq(2L), anyCollection())).thenReturn(false);
-
-        var resultado = servicio.validar(new ValidarRegularidadDto("alu-1", 3L, 80, 7, 75, 6));
-
-        assertThat(resultado.regular()).isTrue();
-        assertThat(resultado.habilitadoParaFinal()).isFalse();
-        assertThat(resultado.motivos()).containsExactly(
-                "No tiene aprobada la correlativa INF-101 · Programación I");
+        assertThat(resultado.id()).isEqualTo(10L);
+        assertThat(resultado.asistenciaMinima()).isEqualByComparingTo("75");
+        assertThat(resultado.promedioMinimo()).isEqualByComparingTo("6");
     }
 }
