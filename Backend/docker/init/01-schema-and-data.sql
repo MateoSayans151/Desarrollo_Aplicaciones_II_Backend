@@ -28,7 +28,7 @@ CREATE TABLE planes_estudio (
     nombre VARCHAR(255) NOT NULL,
     vigencia_desde DATE NOT NULL,
     cantidad_asignaturas INTEGER NOT NULL,
-    estado VARCHAR(30) NOT NULL,
+    estado VARCHAR(30) NOT NULL CHECK (estado IN ('PLANIFICADO', 'ACTIVO')),
     carrera_id BIGINT NOT NULL REFERENCES carreras(id),
     CONSTRAINT uk_plan_carrera_codigo UNIQUE (carrera_id, codigo)
 );
@@ -163,7 +163,7 @@ VALUES ('LGTI', 'Licenciatura en Gestión de Tecnologías de la Información',
         'Licenciado/a en Gestión de Tecnologías de la Información', 'ACTIVA');
 
 INSERT INTO planes_estudio (codigo, nombre, vigencia_desde, cantidad_asignaturas, estado, carrera_id)
-SELECT 'LGTI-2026', 'Plan de estudios LGTI 2026', DATE '2026-01-01', 14, 'ACTIVA', id
+SELECT 'LGTI-2026', 'Plan de estudios LGTI 2026', DATE '2026-01-01', 14, 'ACTIVO', id
 FROM carreras WHERE codigo = 'LGTI';
 
 INSERT INTO asignaturas (codigo, nombre, anio, creditos, carga_horaria, estado, plan_id)

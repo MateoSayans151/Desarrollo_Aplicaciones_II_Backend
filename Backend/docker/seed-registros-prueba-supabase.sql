@@ -12,7 +12,7 @@ VALUES ('TST-001', 'Tecnicatura en Pruebas de Sistemas',
 ON CONFLICT (codigo) DO NOTHING;
 
 INSERT INTO planes_estudio (codigo, nombre, vigencia_desde, cantidad_asignaturas, estado, carrera_id)
-SELECT 'TST-002', 'Plan de estudios de Pruebas 2026', DATE '2026-01-01', 3, 'ACTIVA', c.id
+SELECT 'TST-002', 'Plan de estudios de Pruebas 2026', DATE '2026-01-01', 3, 'ACTIVO', c.id
 FROM carreras c
 WHERE c.codigo = 'TST-001'
 ON CONFLICT (carrera_id, codigo) DO NOTHING;

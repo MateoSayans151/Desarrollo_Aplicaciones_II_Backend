@@ -22,9 +22,9 @@ public class PlanEstudio {
     private LocalDate vigenciaDesde;
     @PositiveOrZero @Column(nullable = false)
     private int cantidadAsignaturas;
-    @Enumerated(EnumType.STRING) @Column(nullable = false)
+    @Convert(converter = EstadoPlanEstudioConverter.class) @Column(nullable = false)
     @Builder.Default
-    private EstadoAcademico estado = EstadoAcademico.ACTIVA;
+    private EstadoPlanEstudio estado = EstadoPlanEstudio.PLANIFICADO;
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "carrera_id", nullable = false)
     private Carrera carrera;

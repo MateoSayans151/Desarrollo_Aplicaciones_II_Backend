@@ -24,6 +24,8 @@ public class EstructuraAcademicaController {
     }
     @GetMapping("/carreras")
     public List<CarreraRespuestaDto> carreras() { return servicio.listarCarreras(); }
+    @GetMapping("/carreras/con-ultimo-plan-activo")
+    public List<CarreraRespuestaDto> carrerasConUltimoPlanActivo() { return servicio.listarCarreras(); }
     @PutMapping("/carreras/{id}")
     public CarreraRespuestaDto actualizarCarrera(@PathVariable Long id, @Valid @RequestBody CrearCarreraDto dto) {
         return servicio.actualizarCarrera(id, dto);
@@ -39,6 +41,13 @@ public class EstructuraAcademicaController {
     }
     @GetMapping("/carreras/{carreraId}/planes")
     public List<PlanRespuestaDto> planes(@PathVariable Long carreraId) { return servicio.listarPlanes(carreraId); }
+    @PutMapping("/planes/{planId}")
+    public PlanRespuestaDto actualizarPlan(@PathVariable Long planId, @Valid @RequestBody ActualizarPlanDto dto) {
+        return servicio.actualizarPlan(planId, dto);
+    }
+    @DeleteMapping("/planes/{planId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void eliminarPlan(@PathVariable Long planId) { servicio.eliminarPlan(planId); }
 
     @GetMapping("/planes/{planId}/pdf")
     public ResponseEntity<byte[]> descargarPlanPdf(@PathVariable Long planId) {

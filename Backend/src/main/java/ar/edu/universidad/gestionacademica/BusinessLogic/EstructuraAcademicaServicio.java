@@ -53,7 +53,8 @@ public class EstructuraAcademicaServicio {
 
     public PlanRespuestaDto crearPlan(Long carreraId, CrearPlanDto dto) {
         PlanEstudio plan = PlanEstudio.builder().codigo(dto.codigo()).nombre(dto.nombre())
-                .vigenciaDesde(dto.vigenciaDesde()).cantidadAsignaturas(dto.cantidadAsignaturas())
+                .vigenciaDesde(dto.vigenciaDesde()).cantidadAsignaturas(0)
+                .estado(EstadoPlanEstudio.PLANIFICADO)
                 .carrera(buscarCarrera(carreraId)).build();
         return plan(planes.save(plan));
     }
@@ -64,11 +65,40 @@ public class EstructuraAcademicaServicio {
         return planes.findByCarreraIdOrderByVigenciaDesdeDesc(carreraId).stream().map(this::plan).toList();
     }
 
+    public PlanRespuestaDto actualizarPlan(Long planId, ActualizarPlanDto dto) {
+        PlanEstudio entidad = buscarPlan(planId);
+        if (entidad.getEstado() == EstadoPlanEstudio.ACTIVO && dto.estado() != EstadoPlanEstudio.ACTIVO) {
+            throw new ReglaNegocioException("Un plan activo no puede cambiar de estado");
+        }
+        entidad.setCodigo(dto.codigo());
+        entidad.setNombre(dto.nombre());
+        entidad.setVigenciaDesde(dto.vigenciaDesde());
+        entidad.setEstado(dto.estado());
+        return plan(entidad);
+    }
+
+    public void eliminarPlan(Long planId) {
+        PlanEstudio entidad = buscarPlan(planId);
+        if (entidad.getEstado() != EstadoPlanEstudio.PLANIFICADO) {
+            throw new ReglaNegocioException("Solo se pueden eliminar planes en estado PLANIFICADO");
+        }
+        Carrera carrera = entidad.getCarrera();
+        correlatividades.deleteByPlanId(planId);
+        asignaturas.deleteByPlanId(planId);
+        planes.delete(entidad);
+        planes.flush();
+        actualizarDuracionCarrera(carrera);
+    }
+
     public AsignaturaRespuestaDto crearAsignatura(Long planId, CrearAsignaturaDto dto) {
+        PlanEstudio plan = buscarPlan(planId);
         Asignatura asignatura = Asignatura.builder().codigo(dto.codigo()).nombre(dto.nombre())
                 .anio(dto.anio()).creditos(dto.creditos()).cargaHoraria(dto.cargaHoraria())
-                .plan(buscarPlan(planId)).build();
-        return asignatura(asignaturas.save(asignatura));
+                .plan(plan).build();
+        Asignatura guardada = asignaturas.saveAndFlush(asignatura);
+        plan.setCantidadAsignaturas(Math.toIntExact(asignaturas.countByPlanId(planId)));
+        actualizarDuracionCarrera(plan.getCarrera());
+        return asignatura(guardada);
     }
 
     @Transactional(readOnly = true)
@@ -126,8 +156,19 @@ public class EstructuraAcademicaServicio {
         return asignaturas.findById(id).orElseThrow(() -> new RecursoNoEncontradoException("Asignatura no encontrada"));
     }
     private CarreraRespuestaDto carrera(Carrera c) {
+        PlanEstudio ultimoPlanActivo = planes
+                .findFirstByCarreraIdAndEstadoOrderByIdDesc(c.getId(), EstadoPlanEstudio.ACTIVO)
+                .orElse(null);
         return new CarreraRespuestaDto(c.getId(), c.getCodigo(), c.getNombre(), c.getFacultad(),
-                calcularDuracion(asignaturas.countByPlan_Carrera_Id(c.getId())), c.getTitulo(), c.getEstado());
+                c.getDuracion(), c.getTitulo(), c.getEstado(),
+                ultimoPlanActivo == null ? null : plan(ultimoPlanActivo));
+    }
+    private void actualizarDuracionCarrera(Carrera carrera) {
+        int maximaCantidad = planes.findByCarreraIdOrderByIdDesc(carrera.getId()).stream()
+                .mapToInt(PlanEstudio::getCantidadAsignaturas)
+                .max()
+                .orElse(0);
+        carrera.setDuracion(calcularDuracion(maximaCantidad));
     }
     private String calcularDuracion(long cantidadAsignaturas) {
         long semestres = (cantidadAsignaturas + 4) / 5;
