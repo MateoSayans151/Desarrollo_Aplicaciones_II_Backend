@@ -10,10 +10,14 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.Instant;
+import java.time.temporal.TemporalAdjusters;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static ar.edu.universidad.gestionacademica.Modelos.CursoDto.*;
@@ -22,6 +26,11 @@ import static ar.edu.universidad.gestionacademica.Modelos.CursoDto.*;
 @RequiredArgsConstructor
 @Transactional
 public class CursoServicio {
+    private static final LocalTime HORA_APERTURA = LocalTime.of(7, 0);
+    private static final LocalTime HORA_INICIO_TARDE = LocalTime.of(13, 0);
+    private static final LocalTime HORA_INICIO_NOCHE = LocalTime.of(18, 0);
+    private static final LocalTime HORA_CIERRE = LocalTime.of(23, 0);
+
     private final CursoRepositorio cursos;
     private final AsignaturaRepositorio asignaturas;
     private final PeriodoAcademicoRepositorio periodos;
@@ -37,16 +46,24 @@ public class CursoServicio {
     public CursoRespuestaDto crear(CrearCursoDto dto) {
         PeriodoAcademico periodo = periodos.findById(dto.periodoId())
                 .orElseThrow(() -> new RecursoNoEncontradoException("Periodo académico no encontrado"));
-        validarFechas(dto.fechaInicio(), dto.fechaFin(), periodo);
-        if (!dto.horaFin().isAfter(dto.horaInicio())) {
-            throw new ReglaNegocioException("La hora de fin del curso debe ser posterior a la de inicio");
+        if (periodo.getFechaFin().isBefore(LocalDate.now())) {
+            throw new ReglaNegocioException("No se pueden crear cursos en un período académico finalizado");
         }
+        validarFechas(dto.fechaInicio(), dto.fechaFin(), periodo);
+        validarHorario(dto.turno(), dto.horaInicio(), dto.horaFin());
+        validarOcurrencia(dto.diaSemana(), dto.fechaInicio(), dto.fechaFin());
         Aula aula = validarAula(dto.aulaId(), dto.sedeId(), dto.cupoMaximo());
         validarDisponibilidad(aula.getId(), dto.diaSemana(), periodo.getId(), dto.horaInicio(), dto.horaFin());
         validarAsignacionesPuntuales(aula.getId(), dto.diaSemana(), dto.fechaInicio(), dto.fechaFin(),
                 dto.horaInicio(), dto.horaFin());
+        String codigo = dto.codigo().trim();
+        if (cursos.existsByPeriodoIdAndCodigo(periodo.getId(), codigo)) {
+            throw new ReglaNegocioException("Ya existe un curso con ese código en el período");
+        }
+        Asignatura asignatura = buscarAsignatura(dto.asignaturaId());
+        validarAsignaturaPlanificable(asignatura);
         Curso curso = cursos.save(Curso.builder()
-                .codigo(dto.codigo().trim()).asignatura(buscarAsignatura(dto.asignaturaId())).periodo(periodo)
+                .codigo(codigo).asignatura(asignatura).periodo(periodo)
                 .sede(buscarSede(dto.sedeId())).modalidad(dto.modalidad()).cupoMaximo(dto.cupoMaximo())
                 .fechaInicio(dto.fechaInicio()).fechaFin(dto.fechaFin())
                 .turno(dto.turno()).horaInicio(dto.horaInicio()).horaFin(dto.horaFin())
@@ -60,8 +77,12 @@ public class CursoServicio {
 
     @Transactional(readOnly = true)
     public List<CursoRespuestaDto> listar(Long periodoId) {
-        List<Curso> encontrados = periodoId == null ? cursos.findAll() : cursos.findByPeriodoIdOrderByCodigo(periodoId);
-        return encontrados.stream().map(this::respuesta).toList();
+        if (periodoId != null) {
+            return cursos.findByPeriodoIdOrderByCodigo(periodoId).stream().map(this::respuesta).toList();
+        }
+        return cursos.findAll().stream()
+                .sorted(Comparator.comparing(Curso::getFechaInicio).reversed().thenComparing(Curso::getCodigo))
+                .map(this::respuesta).toList();
     }
 
     @Transactional(readOnly = true)
@@ -95,16 +116,19 @@ public class CursoServicio {
 
     public CursoDocenteRespuestaDto asignarDocente(Long cursoId, CrearCursoDocenteDto dto) {
         Curso curso = buscarCurso(cursoId);
-        if (cursoDocentes.existsByCursoIdAndDocenteId(cursoId, dto.docenteId())) {
+        validarCursoModificable(curso);
+        String docenteId = dto.docenteId().trim();
+        if (cursoDocentes.existsByCursoIdAndDocenteId(cursoId, docenteId)) {
             throw new ReglaNegocioException("El docente ya está asignado al curso");
         }
         CursoDocente asignacion = cursoDocentes.save(CursoDocente.builder().curso(curso)
-                .docenteId(dto.docenteId().trim()).rol(dto.rol()).build());
+                .docenteId(docenteId).rol(dto.rol()).build());
         return respuesta(asignacion);
     }
 
     public CursoRespuestaDto actualizarEstado(Long cursoId, ActualizarEstadoCursoDto dto) {
         Curso curso = buscarCurso(cursoId);
+        validarTransicionEstado(curso, dto.estado());
         curso.setEstado(dto.estado());
         return respuesta(curso);
     }
@@ -114,24 +138,47 @@ public class CursoServicio {
         if (curso.getEstado() == EstadoCurso.CANCELADO) {
             throw new ReglaNegocioException("No se permiten inscripciones en un curso cancelado");
         }
+        if (curso.getEstado() == EstadoCurso.FINALIZADO) {
+            throw new ReglaNegocioException("No se permiten inscripciones en un curso finalizado");
+        }
         validarVentanaInscripcion(curso.getPeriodo());
-        if (inscripciones.findByCursoIdAndAlumnoId(cursoId, dto.alumnoId().trim()).isPresent()) {
+        String alumnoId = dto.alumnoId().trim();
+        Optional<InscripcionCurso> anterior = inscripciones.findByCursoIdAndAlumnoId(cursoId, alumnoId);
+        if (anterior.isPresent() && anterior.get().getEstado() != EstadoInscripcionCurso.BAJA) {
             throw new ReglaNegocioException("El alumno ya se encuentra inscripto en el curso");
+        }
+        Long asignaturaId = curso.getAsignatura().getId();
+        if (inscripciones.existsByAlumnoIdAndCursoAsignaturaIdAndEstadoIn(alumnoId, asignaturaId,
+                Set.of(EstadoInscripcionCurso.APROBADO))) {
+            throw new ReglaNegocioException("El alumno ya aprobó la asignatura");
+        }
+        if (inscripciones.existsByAlumnoIdAndCursoPeriodoIdAndCursoAsignaturaIdAndEstadoNotIn(alumnoId,
+                curso.getPeriodo().getId(), asignaturaId,
+                Set.of(EstadoInscripcionCurso.BAJA, EstadoInscripcionCurso.DESAPROBADO, EstadoInscripcionCurso.LIBRE))) {
+            throw new ReglaNegocioException("El alumno ya cursa la asignatura en otra comisión del período");
         }
         if (inscripciones.countByCursoIdAndEstadoNot(cursoId, EstadoInscripcionCurso.BAJA) >= curso.getCupoMaximo()) {
             throw new ReglaNegocioException("El curso alcanzó su cupo máximo");
         }
-        validarCorrelatividades(dto.alumnoId().trim(), curso.getAsignatura().getId());
+        validarCorrelatividades(alumnoId, asignaturaId);
+        if (anterior.isPresent()) {
+            InscripcionCurso reinscripcion = anterior.get();
+            reinscripcion.setEstado(EstadoInscripcionCurso.INSCRIPTO);
+            reinscripcion.setFechaInscripcion(LocalDate.now());
+            reinscripcion.setNotaFinal(null);
+            reinscripcion.setFechaResultado(null);
+            return respuesta(reinscripcion);
+        }
         InscripcionCurso inscripcion = inscripciones.save(InscripcionCurso.builder().curso(curso)
-                .alumnoId(dto.alumnoId().trim()).fechaInscripcion(LocalDate.now()).build());
+                .alumnoId(alumnoId).fechaInscripcion(LocalDate.now()).build());
         return respuesta(inscripcion);
     }
 
     public InscripcionCursoRespuestaDto actualizarInscripcion(Long cursoId, String alumnoId,
                                                                 ActualizarInscripcionCursoDto dto) {
-        InscripcionCurso inscripcion = inscripciones.findByCursoIdAndAlumnoId(cursoId, alumnoId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Inscripción no encontrada"));
+        InscripcionCurso inscripcion = buscarInscripcion(cursoId, alumnoId);
         validarResultadoFinal(dto);
+        validarEstadoInscripcion(inscripcion, dto);
         inscripcion.setEstado(dto.estado());
         inscripcion.setNotaFinal(dto.notaFinal());
         inscripcion.setFechaResultado(dto.fechaResultado());
@@ -161,7 +208,11 @@ public class CursoServicio {
         if (inscripcion.getEstado() == EstadoInscripcionCurso.BAJA) {
             throw new ReglaNegocioException("No se puede cargar una nota final a una inscripción dada de baja");
         }
+        if (inscripcion.getCurso().getEstado() == EstadoCurso.CANCELADO) {
+            throw new ReglaNegocioException("No se pueden cargar notas en un curso cancelado");
+        }
         LocalDate fecha = dto.fechaResultado() == null ? LocalDate.now() : dto.fechaResultado();
+        validarFechaResultado(fecha);
         boolean cambio = inscripcion.getNotaFinal() == null
                 || dto.notaFinal().compareTo(inscripcion.getNotaFinal()) != 0
                 || dto.estado() != inscripcion.getEstado()
@@ -187,12 +238,13 @@ public class CursoServicio {
 
     public CursoRespuestaDto actualizarHorario(Long cursoId, ActualizarHorarioCursoDto dto) {
         Curso curso = buscarCurso(cursoId);
-        if (!dto.horaFin().isAfter(dto.horaInicio())) {
-            throw new ReglaNegocioException("La hora de fin debe ser posterior a la de inicio");
-        }
+        validarCursoModificable(curso);
+        validarHorario(curso.getTurno(), dto.horaInicio(), dto.horaFin());
+        validarOcurrencia(dto.diaSemana(), curso.getFechaInicio(), curso.getFechaFin());
         Aula aula = validarAula(dto.aulaId(), curso.getSede().getId(), curso.getCupoMaximo());
-        if (cursos.existsByAulaIdAndDiaSemanaAndPeriodoIdAndHoraInicioLessThanAndHoraFinGreaterThanAndIdNot(
-                aula.getId(), dto.diaSemana(), curso.getPeriodo().getId(), dto.horaFin(), dto.horaInicio(), cursoId)) {
+        if (cursos.existsByAulaIdAndDiaSemanaAndPeriodoIdAndEstadoNotAndHoraInicioLessThanAndHoraFinGreaterThanAndIdNot(
+                aula.getId(), dto.diaSemana(), curso.getPeriodo().getId(), EstadoCurso.CANCELADO,
+                dto.horaFin(), dto.horaInicio(), cursoId)) {
             throw new ReglaNegocioException("El aula ya está ocupada en ese horario durante el período del curso");
         }
         validarAsignacionesPuntuales(aula.getId(), dto.diaSemana(), curso.getFechaInicio(), curso.getFechaFin(),
@@ -218,23 +270,80 @@ public class CursoServicio {
         return aula;
     }
 
-    private void validarDisponibilidad(Long aulaId, java.time.DayOfWeek diaSemana, Long periodoId,
-                                       java.time.LocalTime horaInicio, java.time.LocalTime horaFin) {
-        if (cursos.existsByAulaIdAndDiaSemanaAndPeriodoIdAndHoraInicioLessThanAndHoraFinGreaterThan(
-                aulaId, diaSemana, periodoId, horaFin, horaInicio)) {
+    private void validarDisponibilidad(Long aulaId, DayOfWeek diaSemana, Long periodoId,
+                                       LocalTime horaInicio, LocalTime horaFin) {
+        if (cursos.existsByAulaIdAndDiaSemanaAndPeriodoIdAndEstadoNotAndHoraInicioLessThanAndHoraFinGreaterThan(
+                aulaId, diaSemana, periodoId, EstadoCurso.CANCELADO, horaFin, horaInicio)) {
             throw new ReglaNegocioException("El aula ya está ocupada en ese horario durante el período del curso");
         }
     }
 
-    private void validarAsignacionesPuntuales(Long aulaId, java.time.DayOfWeek diaSemana,
+    private void validarAsignacionesPuntuales(Long aulaId, DayOfWeek diaSemana,
                                                LocalDate fechaInicio, LocalDate fechaFin,
-                                               java.time.LocalTime horaInicio,
-                                               java.time.LocalTime horaFin) {
+                                               LocalTime horaInicio, LocalTime horaFin) {
         boolean existeConflicto = asignaciones.findConflictosConCurso(
                         aulaId, fechaInicio, fechaFin, horaInicio, horaFin).stream()
                 .anyMatch(asignacion -> asignacion.getFecha().getDayOfWeek() == diaSemana);
         if (existeConflicto) {
             throw new ReglaNegocioException("El aula tiene una asignación puntual en ese horario durante el curso");
+        }
+    }
+
+    private void validarHorario(TurnoCurso turno, LocalTime horaInicio, LocalTime horaFin) {
+        if (!horaFin.isAfter(horaInicio)) {
+            throw new ReglaNegocioException("La hora de fin debe ser posterior a la de inicio");
+        }
+        if (horaInicio.isBefore(HORA_APERTURA) || horaFin.isAfter(HORA_CIERRE)) {
+            throw new ReglaNegocioException("El horario del curso debe estar entre las 07:00 y las 23:00");
+        }
+        if (turno == null) return;
+        boolean coincide = switch (turno) {
+            case MAÑANA -> horaInicio.isBefore(HORA_INICIO_TARDE);
+            case TARDE -> !horaInicio.isBefore(HORA_INICIO_TARDE) && horaInicio.isBefore(HORA_INICIO_NOCHE);
+            case NOCHE -> !horaInicio.isBefore(HORA_INICIO_NOCHE);
+        };
+        if (!coincide) {
+            throw new ReglaNegocioException("La hora de inicio no corresponde al turno " + turno
+                    + " (mañana: 07 a 13, tarde: 13 a 18, noche: desde las 18)");
+        }
+    }
+
+    private void validarOcurrencia(DayOfWeek diaSemana, LocalDate fechaInicio, LocalDate fechaFin) {
+        if (fechaInicio.with(TemporalAdjusters.nextOrSame(diaSemana)).isAfter(fechaFin)) {
+            throw new ReglaNegocioException("El día de cursada no ocurre entre las fechas del curso");
+        }
+    }
+
+    private void validarCursoModificable(Curso curso) {
+        if (curso.getEstado() == EstadoCurso.FINALIZADO || curso.getEstado() == EstadoCurso.CANCELADO) {
+            throw new ReglaNegocioException("Un curso finalizado o cancelado no se puede modificar");
+        }
+    }
+
+    private void validarTransicionEstado(Curso curso, EstadoCurso nuevo) {
+        EstadoCurso actual = curso.getEstado();
+        if (actual == nuevo) return;
+        boolean permitida = switch (actual) {
+            case PLANIFICADO -> nuevo == EstadoCurso.EN_CURSO || nuevo == EstadoCurso.CANCELADO;
+            case EN_CURSO -> nuevo == EstadoCurso.FINALIZADO || nuevo == EstadoCurso.CANCELADO;
+            case FINALIZADO, CANCELADO -> false;
+        };
+        if (!permitida) {
+            throw new ReglaNegocioException("Un curso no puede pasar de " + actual + " a " + nuevo);
+        }
+        if (nuevo == EstadoCurso.EN_CURSO && LocalDate.now().isBefore(curso.getFechaInicio())) {
+            throw new ReglaNegocioException("Un curso no puede comenzar antes de su fecha de inicio");
+        }
+    }
+
+    /** Un plan en borrador o una carrera inactiva todavía no pueden ocupar aulas ni abrir comisiones. */
+    static void validarAsignaturaPlanificable(Asignatura asignatura) {
+        PlanEstudio plan = asignatura.getPlan();
+        if (plan.getEstado() != EstadoPlanEstudio.ACTIVO) {
+            throw new ReglaNegocioException("La asignatura pertenece a un plan de estudio que todavía no está activo");
+        }
+        if (plan.getCarrera().getEstado() == EstadoAcademico.INACTIVA) {
+            throw new ReglaNegocioException("La asignatura pertenece a una carrera inactiva");
         }
     }
 
@@ -256,6 +365,21 @@ public class CursoServicio {
                 || dto.estado() == EstadoInscripcionCurso.DESAPROBADO;
         if (estadoFinal && (dto.notaFinal() == null || dto.fechaResultado() == null)) {
             throw new ReglaNegocioException("Un resultado final requiere nota final y fecha de resultado");
+        }
+        if (dto.fechaResultado() != null) validarFechaResultado(dto.fechaResultado());
+    }
+    private void validarEstadoInscripcion(InscripcionCurso inscripcion, ActualizarInscripcionCursoDto dto) {
+        boolean tomaBaja = dto.estado() == EstadoInscripcionCurso.BAJA;
+        if (tomaBaja && dto.notaFinal() != null) {
+            throw new ReglaNegocioException("Una inscripción dada de baja no puede tener nota final");
+        }
+        if (inscripcion.getEstado() == EstadoInscripcionCurso.BAJA && !tomaBaja) {
+            throw new ReglaNegocioException("La inscripción está dada de baja; el alumno debe volver a inscribirse");
+        }
+    }
+    private void validarFechaResultado(LocalDate fecha) {
+        if (fecha.isAfter(LocalDate.now())) {
+            throw new ReglaNegocioException("La fecha de resultado no puede ser futura");
         }
     }
     private EventoNotificacionDto eventoResultado(InscripcionCurso inscripcion) {

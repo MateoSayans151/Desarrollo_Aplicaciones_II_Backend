@@ -60,7 +60,7 @@ La ruta de consulta de sedes se dejó como /api/v1/backoffice/sites por convenci
 
 ## Correspondencia de entidades
 
-Se conservan las claves numéricas locales que ya usan Cursos, Horarios y Asignaciones. Los UUID de Backoffice se guardan como referencias externas únicas:
+Se conservan las claves numéricas locales que ya usan Cursos y Asignaciones. Los UUID de Backoffice se guardan como referencias externas únicas:
 
 | Backoffice | Gestión Académica | Uso |
 | --- | --- | --- |

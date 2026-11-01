@@ -10,5 +10,7 @@ import java.util.Optional;
 public interface PlanEstudioRepositorio extends JpaRepository<PlanEstudio, Long> {
     List<PlanEstudio> findByCarreraIdOrderByVigenciaDesdeDesc(Long carreraId);
     List<PlanEstudio> findByCarreraIdOrderByIdDesc(Long carreraId);
-    Optional<PlanEstudio> findFirstByCarreraIdAndEstadoOrderByIdDesc(Long carreraId, EstadoPlanEstudio estado);
+    Optional<PlanEstudio> findFirstByCarreraIdAndEstadoOrderByVigenciaDesdeDescIdDesc(Long carreraId, EstadoPlanEstudio estado);
+    boolean existsByCarreraIdAndCodigo(Long carreraId, String codigo);
+    boolean existsByCarreraIdAndCodigoAndIdNot(Long carreraId, String codigo, Long id);
 }

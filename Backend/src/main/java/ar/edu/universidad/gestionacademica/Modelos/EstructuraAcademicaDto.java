@@ -15,8 +15,9 @@ public final class EstructuraAcademicaDto {
                                   @NotBlank
                                   @Pattern(regexp = "^[A-Z]{3}[0-9]?-[0-9]{3}$",
                                            message = "debe tener el formato ARQ-001 o ARQ1-001")
-                                  String codigo, @NotBlank String nombre,
-                                  @NotBlank String facultad, @NotBlank String titulo) { }
+                                  String codigo, @NotBlank @Size(max = 255) String nombre,
+                                  @NotBlank @Size(max = 255) String facultad,
+                                  @NotBlank @Size(max = 255) String titulo) { }
     public record CarreraRespuestaDto(Long id, String codigo, String nombre, String facultad,
                                       String duracion, String titulo, EstadoAcademico estado,
                                       PlanRespuestaDto ultimoPlanActivo) { }
@@ -25,13 +26,13 @@ public final class EstructuraAcademicaDto {
                                @NotBlank
                                @Pattern(regexp = "^[A-Z]{3}[0-9]?-[0-9]{3}$",
                                         message = "debe tener el formato ARQ-001 o ARQ1-001")
-                               String codigo, @NotBlank String nombre,
+                               String codigo, @NotBlank @Size(max = 255) String nombre,
                                @NotNull LocalDate vigenciaDesde) { }
     public record ActualizarPlanDto(
                                     @NotBlank
                                     @Pattern(regexp = "^[A-Z]{3}[0-9]?-[0-9]{3}$",
                                              message = "debe tener el formato ARQ-001 o ARQ1-001")
-                                    String codigo, @NotBlank String nombre,
+                                    String codigo, @NotBlank @Size(max = 255) String nombre,
                                     @NotNull LocalDate vigenciaDesde,
                                     @NotNull EstadoPlanEstudio estado) { }
     public record PlanRespuestaDto(Long id, String codigo, String nombre, LocalDate vigenciaDesde,
@@ -41,8 +42,8 @@ public final class EstructuraAcademicaDto {
                                      @NotBlank
                                      @Pattern(regexp = "^[A-Z]{3}[0-9]?-[0-9]{3}$",
                                               message = "debe tener el formato ARQ-001 o ARQ1-001")
-                                     String codigo, @NotBlank String nombre,
-                                     @Min(1) int anio, @Positive int creditos,
+                                     String codigo, @NotBlank @Size(max = 255) String nombre,
+                                     @Min(1) @Max(10) int anio, @Positive int creditos,
                                      @Positive int cargaHoraria) { }
     public record AsignaturaRespuestaDto(Long id, String codigo, String nombre, int anio,
                                          int creditos, int cargaHoraria, EstadoAcademico estado,

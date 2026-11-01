@@ -53,6 +53,14 @@ Luego aplicar `docker/migrations/06-regularidad-por-curso.sql`. Crea
 de 75% de asistencia mínima y promedio 6.0 para cada curso que todavía no tenga una.
 La migración es idempotente y también sincroniza el código almacenado con el del curso.
 
+Por último aplicar `docker/migrations/07-plan-estados-y-correlatividad-unica.sql`.
+Reemplaza el check de `planes_estudio.estado` por `PLANIFICADO`/`ACTIVO`, convierte los
+valores anteriores y deja una única correlatividad por par de asignaturas, conservando
+la más exigente. Es idempotente y también debe aplicarse en Supabase.
+
+`seed-registros-prueba-supabase.sql` carga datos de demostración sobre tablas académicas
+vacías y no modifica `usuarios`. Usa fechas fijas de 2025 a 2027.
+
 ### Cambios de esquema
 
 El período académico ahora incluye `inscripcionDesde` e `inscripcionHasta`.

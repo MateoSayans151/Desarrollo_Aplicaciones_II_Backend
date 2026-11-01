@@ -22,7 +22,7 @@ objetivo con CORE:
 | Endpoints privados `/internal/v1/**` | No implementados | El módulo actualmente no expone endpoints backend-a-backend. |
 | Backoffice | Preparado, no conectado | Existen referencias `backofficeSiteId`/`backofficeLocationId`; falta el cliente HTTP y la sincronización paginada. |
 | Eventos CORE | Pendiente de adaptar | El publicador Rabbit opcional actual usa un envelope y topología propios. CORE exige publicar mediante su contrato, no declarar exchanges/colas desde este módulo. |
-| Errores CORE | Parcial | Los errores de aplicación usan `application/problem+json` con `code` y `correlationId`; falta aplicar la misma forma a los `401` y `403` de Spring Security. |
+| Errores CORE | Implementado | Todos los errores, incluidos `401` y `403` de Spring Security, usan `application/problem+json` con `code` y `correlationId`. |
 
 Por lo tanto, las rutas listadas abajo son rutas internas actuales del servicio. No deben
 exponerse directamente a Internet. La URL pública definitiva debe pasar por el gateway.
@@ -55,10 +55,13 @@ No existen controladores `/api/usuarios`, ni endpoints para crear o listar usuar
 | --- | --- | --- |
 | `POST` | `/api/academica/carreras` | Crear carrera. |
 | `GET` | `/api/academica/carreras` | Listar carreras. |
+| `GET` | `/api/academica/carreras/con-ultimo-plan-activo` | Listar carreras; es equivalente al anterior, cuyo campo `ultimoPlanActivo` trae el plan activo de vigencia más reciente. |
 | `PUT` | `/api/academica/carreras/{id}` | Actualizar carrera. |
 | `DELETE` | `/api/academica/carreras/{id}` | Desactivación lógica: cambia el estado a `INACTIVA`. |
 | `POST` | `/api/academica/carreras/{carreraId}/planes` | Crear plan de estudio. |
 | `GET` | `/api/academica/carreras/{carreraId}/planes` | Listar planes de una carrera. |
+| `PUT` | `/api/academica/planes/{planId}` | Editar un plan o activarlo. |
+| `DELETE` | `/api/academica/planes/{planId}` | Eliminar un plan `PLANIFICADO` sin cursos ni reservas, junto con sus asignaturas. |
 | `GET` | `/api/academica/planes/{planId}/pdf` | Descargar PDF con asignaturas y correlatividades del plan. |
 | `POST` | `/api/academica/planes/{planId}/asignaturas` | Crear asignatura en un plan. |
 | `GET` | `/api/academica/planes/{planId}/asignaturas` | Listar asignaturas de un plan. |
@@ -125,11 +128,12 @@ integración objetivo deberán transportar el UUID de CORE como texto.
 | --- | --- | --- |
 | Login local | `{ "email": "...", "password": "..." }` | `200`, usuario autenticado y cookie `JSESSIONID`. |
 | Crear/editar carrera | `{ "codigo", "nombre", "facultad", "titulo" }` | `201` al crear, `200` al editar; la respuesta incluye `duracion`, calculada automáticamente según las materias de la carrera. |
-| Crear plan | `{ "codigo", "nombre", "vigenciaDesde", "cantidadAsignaturas" }` | `201`; plan con `id`, `estado` y `carreraId`. |
+| Crear plan | `{ "codigo", "nombre", "vigenciaDesde" }` | `201`; plan en estado `PLANIFICADO`, con `id`, `carreraId` y `cantidadAsignaturas` calculada. |
+| Editar plan | `{ "codigo", "nombre", "vigenciaDesde", "estado": "PLANIFICADO|ACTIVO" }` | `200`; plan actualizado. |
 | Crear asignatura | `{ "codigo", "nombre", "anio", "creditos", "cargaHoraria" }` | `201`; asignatura con `id`, `estado` y `planId`. |
 | Crear correlatividad | `{ "correlativaId": 1, "tipo": "REGULAR|APROBADA" }` | `201`; relación creada. |
 | Crear sede | `{ "nombre", "direccion" }` | `201`; sede con `id`, `backofficeSiteId` y `estado`. |
-| Crear aula | `{ "codigo", "capacidadMaxima", "nombre"? }` | `201`; aula tipo `AULA`; si falta `nombre`, usa el código. |
+| Crear aula | `{ "codigo", "capacidadMaxima", "nombre"? }` | `201`; aula tipo `AULA`; capacidad de 1 a 100; si falta `nombre`, usa el código. |
 | Asignar aula | `{ "aulaId", "asignaturaId", "fecha", "horaInicio", "horaFin", "cantidadEstudiantes" }` | `201`; asignación persistida. |
 | Crear período | `{ "anio", "numero", "fechaInicio", "fechaFin", "inscripcionDesde", "inscripcionHasta" }` | `201`; período creado. `numero` admite 1 o 2. |
 | Crear turno de examen | `{ "nombre", "fechaInicio", "fechaFin", "inscripcionDesde", "inscripcionHasta" }` | `201`; turno creado. |
@@ -153,34 +157,53 @@ Salvo health, Swagger y login, la configuración actual exige
 ## Reglas de negocio consolidadas
 
 - Carreras: el código debe ser único sin distinguir mayúsculas/minúsculas; eliminar es
-  una desactivación lógica.
+  una desactivación lógica y se rechaza con cursos planificados o en curso. Una carrera
+  inactiva no admite planes ni asignaturas nuevas.
+- Planes: nacen `PLANIFICADO` y el código es único en la carrera. Para pasar a `ACTIVO`
+  necesitan asignaturas y una vigencia que no sea de un año futuro. Un plan activo no
+  vuelve a planificado ni se elimina. Pueden convivir varios planes activos y el borrador
+  de un plan futuro.
 - Códigos nuevos de carrera, plan, asignatura y curso: formato `ARQ-001` o
   `ARQ1-001`.
 - Correlatividades: una asignatura no puede ser correlativa de sí misma y ambas deben
   pertenecer al mismo plan. Una materia sólo puede configurarse una vez como correlativa
   de otra; repetirla con el mismo tipo o con un tipo distinto responde HTTP 400 con
-  `BUSINESS_RULE_VIOLATION`.
+  `BUSINESS_RULE_VIOLATION`. Se rechazan los ciclos, directos o indirectos, y las
+  correlativas de un año posterior al de la asignatura.
 - Aulas: sólo ubicaciones de tipo `AULA` pueden asignarse; la cantidad de estudiantes o
   el cupo del curso no puede superar su capacidad.
 - Ocupación: no se permiten horarios superpuestos para la misma aula, tampoco entre
   tipos distintos. Las asignaciones puntuales comparan fecha y hora; los cursos comparan
   día de semana y período, y la agenda expande cada ocurrencia semanal dentro del rango.
+  Un curso cancelado libera el aula. Las reservas puntuales no aceptan fechas pasadas y
+  deben estar entre las 07:00 y las 23:00.
+- Cursos y reservas: sólo admiten asignaturas de planes `ACTIVO` de carreras no inactivas.
 - Cursos: la fecha final debe ser posterior a la inicial y ambas deben caer dentro del
-  período académico; la hora final debe ser posterior a la inicial; el aula debe
-  pertenecer a la sede elegida.
-- Inscripciones: no se aceptan en cursos cancelados, fuera de la ventana del período,
-  duplicadas, por encima del cupo ni sin cumplir correlatividades.
+  período académico, que no puede haber finalizado; el código es único en el período; el
+  horario está entre las 07:00 y las 23:00 y el día de cursada debe ocurrir entre las
+  fechas; el aula debe pertenecer a la sede elegida. La hora de inicio debe corresponder
+  al turno: `MAÑANA` antes de las 13:00, `TARDE` de 13:00 a 18:00 y `NOCHE` desde las 18:00.
+- Estados de curso: `PLANIFICADO` pasa a `EN_CURSO`, desde su fecha de inicio, o a
+  `CANCELADO`; `EN_CURSO` pasa a `FINALIZADO` o `CANCELADO`. Un curso finalizado o
+  cancelado no se reabre ni admite cambios de horario, docentes o inscripciones.
+- Inscripciones: no se aceptan en cursos cancelados o finalizados, fuera de la ventana
+  del período, duplicadas, por encima del cupo, sin cumplir correlatividades, si el
+  alumno ya aprobó la materia o si ya la cursa en otra comisión del período. Un alumno
+  dado de baja debe volver a inscribirse: se reactiva su inscripción existente.
 - Correlatividad `REGULAR`: admite antecedente `REGULAR` o `APROBADO`.
   Correlatividad `APROBADA`: exige antecedente `APROBADO`.
 - Resultados: una nota está entre 0 y 10. Los estados finales son `APROBADO` o
-  `DESAPROBADO`; un resultado final necesita nota y fecha. No se cargan notas a una
-  inscripción en `BAJA`.
-- Períodos y turnos: todo rango termina después de comenzar. La inscripción debe cerrar
-  antes o el mismo día del inicio del período, y antes del inicio del turno de examen.
+  `DESAPROBADO`; un resultado final necesita nota y fecha, que no puede ser futura. No se
+  cargan notas a una inscripción en `BAJA` ni en un curso cancelado.
+- Períodos y turnos: todo rango termina después de comenzar y no puede superponerse con
+  otro del mismo tipo. El período comienza en el año indicado y es único por año y número;
+  el nombre del turno es único. La inscripción debe cerrar antes o el mismo día del inicio
+  del período, y antes del inicio del turno de examen.
 - Regularidad: la asistencia mínima debe estar entre 0 y 100 y el promedio mínimo
   entre 0 y 10. Ambos valores pertenecen al curso y no a un alumno.
 
 Enums expuestos: `EstadoAcademico = ACTIVA | BORRADOR | INACTIVA`,
+`EstadoPlanEstudio = PLANIFICADO | ACTIVO`,
 `EstadoCurso = PLANIFICADO | EN_CURSO | FINALIZADO | CANCELADO`,
 `EstadoInscripcionCurso = INSCRIPTO | CURSANDO | BAJA | REGULAR | LIBRE | APROBADO | DESAPROBADO`,
 `ModalidadCurso = PRESENCIAL | VIRTUAL | HIBRIDA`,
@@ -197,10 +220,13 @@ agregan `errors`, un objeto por campo.
 | --- | --- | --- |
 | Recurso inexistente | `404` | `RESOURCE_NOT_FOUND` |
 | Regla de negocio | `400` | `BUSINESS_RULE_VIOLATION` |
-| Validación de DTO | `400` | `VALIDATION_ERROR` |
+| Validación de DTO, JSON mal formado o parámetro inválido | `400` | `VALIDATION_ERROR` |
+| Credenciales de login incorrectas | `401` | `INVALID_CREDENTIALS` |
+| Sin sesión/token | `401` | `UNAUTHORIZED` |
+| Sin rol requerido | `403` | `FORBIDDEN` |
+| Duplicado concurrente rechazado por la base | `409` | `DATA_CONFLICT` |
 | Error de persistencia | `500` | `DATA_ACCESS_ERROR` |
-| Sin sesión/token | `401` | Respuesta de Spring Security pendiente de unificar. |
-| Sin rol requerido | `403` | Respuesta de Spring Security pendiente de unificar. |
+| Error inesperado | `500` | `INTERNAL_ERROR` |
 
 ## Formato obligatorio de códigos
 
@@ -250,7 +276,7 @@ Estas consultas ya existen en Gestión Académica:
 
 | Método | Ruta | Devuelve |
 | --- | --- | --- |
-| `GET` | `/api/academica/carreras` | Carreras con `id`, `codigo`, `nombre`, `facultad`, `duracion`, `titulo` y `estado`. Sirve para encontrar el `carreraId`. |
+| `GET` | `/api/academica/carreras` | Carreras con `id`, `codigo`, `nombre`, `facultad`, `duracion`, `titulo`, `estado` y `ultimoPlanActivo`. Sirve para encontrar el `carreraId`. |
 | `GET` | `/api/academica/carreras/{carreraId}/planes` | Planes de esa carrera con `id`, `codigo`, `nombre`, `vigenciaDesde`, `cantidadAsignaturas`, `estado` y `carreraId`. |
 | `GET` | `/api/academica/planes/{planId}/asignaturas` | Asignaturas de ese plan con `id`, `codigo`, `nombre`, `anio`, `creditos`, `cargaHoraria`, `estado` y `planId`. |
 

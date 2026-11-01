@@ -1,6 +1,6 @@
 # Integración con CORE: estado y pedidos pendientes
 
-Revisión realizada el 23 de octubre de 2026 tomando como referencia el contrato CORE
+Revisión realizada el 1 de noviembre de 2026 tomando como referencia el contrato CORE
 v1 del 5 de agosto de 2026. Este documento separa lo que funciona localmente de lo que
 requiere coordinación con CORE u otro módulo.
 
@@ -14,7 +14,7 @@ requiere coordinación con CORE u otro módulo.
 | OpenAPI | Disponible en `/v3/api-docs` y Swagger UI en `/swagger-ui.html`. |
 | Gateway CORE | Pendiente. El contrato espera exponer `/api/v1/academic/*` y reescribir a `/api/v1/*`, pero el backend recibe `/api/**`. |
 | Autenticación CORE | Pendiente. La aplicación usa login local; todavía no valida JWT RS256 de CORE. |
-| Errores CORE | Los errores de aplicación usan `application/problem+json`; falta unificar los `401`/`403` de Spring Security. |
+| Errores CORE | Todos los errores, incluidos `401` y `403` de Spring Security, usan `application/problem+json` con `code` y `correlationId`. |
 | Correlación | Los errores conservan o generan `correlationId`; falta propagarlo sistemáticamente en logs, llamadas y eventos. |
 | Eventos publicados | Existe un publicador Rabbit opcional legado para resultados; no cumple el envelope ni la topología de CORE. |
 | Eventos consumidos | Pendientes `teacher.attendance.recorded.v1` y `teacher.exam-result.published.v1`. |
@@ -43,8 +43,8 @@ Enviar un pedido con estos datos:
    contrato CORE menciona `/docs` y `/docs-json`; hoy Spring expone otras rutas.
 9. **Health checks del gateway** contra `/health/live` y `/health/ready`, incluidos
    intervalos y timeout.
-10. **Formato de errores de seguridad** para que los `401` y `403` también incluyan
-    `code` y `correlationId`.
+10. **Códigos de error de seguridad**: confirmar si CORE acepta `UNAUTHORIZED` y
+    `FORBIDDEN`, que ya se devuelven con `code` y `correlationId`.
 
 ### Texto listo para enviar a CORE
 

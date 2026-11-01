@@ -12,6 +12,7 @@ import java.util.List;
 public interface AsignacionAulaRepositorio extends JpaRepository<AsignacionAula, Long> {
     boolean existsByAulaIdAndFechaAndHoraInicioLessThanAndHoraFinGreaterThan(
             Long aulaId, LocalDate fecha, LocalTime horaFin, LocalTime horaInicio);
+    boolean existsByAsignaturaPlanId(Long planId);
 
     @EntityGraph(attributePaths = {"aula", "asignatura"})
     List<AsignacionAula> findByAulaIdAndFechaOrderByHoraInicio(Long aulaId, LocalDate fecha);

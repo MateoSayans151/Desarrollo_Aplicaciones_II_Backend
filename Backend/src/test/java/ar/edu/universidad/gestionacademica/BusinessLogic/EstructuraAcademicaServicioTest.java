@@ -3,18 +3,22 @@ package ar.edu.universidad.gestionacademica.BusinessLogic;
 import ar.edu.universidad.gestionacademica.Entidades.Carrera;
 import ar.edu.universidad.gestionacademica.Entidades.Asignatura;
 import ar.edu.universidad.gestionacademica.Entidades.Correlatividad;
+import ar.edu.universidad.gestionacademica.Entidades.EstadoAcademico;
 import ar.edu.universidad.gestionacademica.Entidades.EstadoPlanEstudio;
 import ar.edu.universidad.gestionacademica.Entidades.PlanEstudio;
 import ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException;
 import ar.edu.universidad.gestionacademica.Modelos.EstructuraAcademicaDto.CrearCorrelatividadDto;
+import ar.edu.universidad.gestionacademica.Repositorios.AsignacionAulaRepositorio;
 import ar.edu.universidad.gestionacademica.Repositorios.AsignaturaRepositorio;
 import ar.edu.universidad.gestionacademica.Repositorios.CarreraRepositorio;
 import ar.edu.universidad.gestionacademica.Repositorios.CorrelatividadRepositorio;
+import ar.edu.universidad.gestionacademica.Repositorios.CursoRepositorio;
 import ar.edu.universidad.gestionacademica.Repositorios.PlanEstudioRepositorio;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.List;
+import java.util.Optional;
 import java.time.LocalDate;
 
 import static ar.edu.universidad.gestionacademica.Modelos.EstructuraAcademicaDto.CrearCarreraDto;
@@ -28,8 +32,92 @@ class EstructuraAcademicaServicioTest {
     private final PlanEstudioRepositorio planes = mock(PlanEstudioRepositorio.class);
     private final AsignaturaRepositorio asignaturas = mock(AsignaturaRepositorio.class);
     private final CorrelatividadRepositorio correlatividades = mock(CorrelatividadRepositorio.class);
+    private final CursoRepositorio cursos = mock(CursoRepositorio.class);
+    private final AsignacionAulaRepositorio asignaciones = mock(AsignacionAulaRepositorio.class);
     private final EstructuraAcademicaServicio servicio = new EstructuraAcademicaServicio(
-            carreras, planes, asignaturas, correlatividades);
+            carreras, planes, asignaturas, correlatividades, cursos, asignaciones);
+
+    @Test
+    void rechazaEditarUnaCarreraConElCodigoDeOtra() {
+        when(carreras.findById(4L)).thenReturn(Optional.of(Carrera.builder().id(4L).build()));
+        when(carreras.existsByCodigoIgnoreCaseAndIdNot("INF-001", 4L)).thenReturn(true);
+
+        assertThatThrownBy(() -> servicio.actualizarCarrera(4L, new CrearCarreraDto(
+                "INF-001", "Ingeniería", "Ingeniería", "Ingeniero/a")))
+                .hasMessageContaining("Ya existe");
+    }
+
+    @Test
+    void unPlanFuturoNoPuedeActivarse() {
+        var carrera = Carrera.builder().id(4L).build();
+        when(planes.findById(2L)).thenReturn(Optional.of(PlanEstudio.builder().id(2L).carrera(carrera)
+                .estado(EstadoPlanEstudio.PLANIFICADO).build()));
+        var vigencia = LocalDate.now().plusYears(1).withDayOfYear(1);
+
+        assertThatThrownBy(() -> servicio.actualizarPlan(2L, new ar.edu.universidad.gestionacademica.Modelos
+                .EstructuraAcademicaDto.ActualizarPlanDto("INF-002", "Plan futuro", vigencia, EstadoPlanEstudio.ACTIVO)))
+                .hasMessageContaining("futuro");
+    }
+
+    @Test
+    void unPlanSinAsignaturasNoPuedeActivarse() {
+        var carrera = Carrera.builder().id(4L).build();
+        when(planes.findById(2L)).thenReturn(Optional.of(PlanEstudio.builder().id(2L).carrera(carrera)
+                .estado(EstadoPlanEstudio.PLANIFICADO).build()));
+
+        assertThatThrownBy(() -> servicio.actualizarPlan(2L, new ar.edu.universidad.gestionacademica.Modelos
+                .EstructuraAcademicaDto.ActualizarPlanDto("INF-002", "Plan", LocalDate.now(), EstadoPlanEstudio.ACTIVO)))
+                .hasMessageContaining("sin asignaturas");
+    }
+
+    @Test
+    void noSePuedeCrearUnPlanEnUnaCarreraInactiva() {
+        when(carreras.findById(4L)).thenReturn(Optional.of(Carrera.builder().id(4L)
+                .estado(EstadoAcademico.INACTIVA).build()));
+
+        assertThatThrownBy(() -> servicio.crearPlan(4L, new ar.edu.universidad.gestionacademica.Modelos
+                .EstructuraAcademicaDto.CrearPlanDto("INF-002", "Plan", LocalDate.now())))
+                .hasMessageContaining("inactiva");
+    }
+
+    @Test
+    void noSePuedeEliminarUnPlanConCursos() {
+        when(planes.findById(2L)).thenReturn(Optional.of(PlanEstudio.builder().id(2L)
+                .estado(EstadoPlanEstudio.PLANIFICADO).build()));
+        when(cursos.existsByAsignaturaPlanId(2L)).thenReturn(true);
+
+        assertThatThrownBy(() -> servicio.eliminarPlan(2L)).hasMessageContaining("cursos");
+        verify(planes, never()).delete(any());
+    }
+
+    @Test
+    void rechazaUnaCorrelatividadCircularIndirecta() {
+        PlanEstudio plan = PlanEstudio.builder().id(2L).build();
+        Asignatura a = Asignatura.builder().id(1L).codigo("AAA-001").anio(1).plan(plan).build();
+        Asignatura b = Asignatura.builder().id(2L).codigo("BBB-001").anio(1).plan(plan).build();
+        Asignatura c = Asignatura.builder().id(3L).codigo("CCC-001").anio(1).plan(plan).build();
+        when(asignaturas.findById(1L)).thenReturn(Optional.of(a));
+        when(asignaturas.findById(3L)).thenReturn(Optional.of(c));
+        when(correlatividades.findByAsignaturaId(3L)).thenReturn(List.of(
+                Correlatividad.builder().asignatura(c).correlativa(b).tipo(Correlatividad.Tipo.REGULAR).build()));
+        when(correlatividades.findByAsignaturaId(2L)).thenReturn(List.of(
+                Correlatividad.builder().asignatura(b).correlativa(a).tipo(Correlatividad.Tipo.REGULAR).build()));
+
+        assertThatThrownBy(() -> servicio.agregarCorrelatividad(1L, new ar.edu.universidad.gestionacademica.Modelos
+                .EstructuraAcademicaDto.CrearCorrelatividadDto(3L, Correlatividad.Tipo.APROBADA)))
+                .hasMessageContaining("ciclo");
+    }
+
+    @Test
+    void rechazaUnaCorrelativaDeUnAnioPosterior() {
+        PlanEstudio plan = PlanEstudio.builder().id(2L).build();
+        when(asignaturas.findById(1L)).thenReturn(Optional.of(Asignatura.builder().id(1L).anio(1).plan(plan).build()));
+        when(asignaturas.findById(2L)).thenReturn(Optional.of(Asignatura.builder().id(2L).anio(3).plan(plan).build()));
+
+        assertThatThrownBy(() -> servicio.agregarCorrelatividad(1L, new ar.edu.universidad.gestionacademica.Modelos
+                .EstructuraAcademicaDto.CrearCorrelatividadDto(2L, Correlatividad.Tipo.REGULAR)))
+                .hasMessageContaining("año posterior");
+    }
 
     @Test
     void creaLaCarreraSinDuracionInicial() {
@@ -144,7 +232,7 @@ class EstructuraAcademicaServicioTest {
         PlanEstudio activo = PlanEstudio.builder().id(2L).estado(EstadoPlanEstudio.ACTIVO)
                 .carrera(carrera).build();
         when(carreras.findAll()).thenReturn(List.of(carrera));
-        when(planes.findFirstByCarreraIdAndEstadoOrderByIdDesc(4L, EstadoPlanEstudio.ACTIVO))
+        when(planes.findFirstByCarreraIdAndEstadoOrderByVigenciaDesdeDescIdDesc(4L, EstadoPlanEstudio.ACTIVO))
                 .thenReturn(java.util.Optional.of(activo));
 
         assertThat(servicio.listarCarreras()).singleElement()

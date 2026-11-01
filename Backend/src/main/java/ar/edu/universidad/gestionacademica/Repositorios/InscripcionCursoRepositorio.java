@@ -17,5 +17,7 @@ public interface InscripcionCursoRepositorio extends JpaRepository<InscripcionCu
     List<InscripcionCurso> findByAlumnoIdAndCursoPeriodoIdOrderByCursoCodigoAsc(String alumnoId, Long periodoId);
     boolean existsByAlumnoIdAndCursoAsignaturaIdAndEstadoIn(String alumnoId, Long asignaturaId,
                                                             Collection<EstadoInscripcionCurso> estados);
+    boolean existsByAlumnoIdAndCursoPeriodoIdAndCursoAsignaturaIdAndEstadoNotIn(
+            String alumnoId, Long periodoId, Long asignaturaId, Collection<EstadoInscripcionCurso> estados);
     long countByCursoIdAndEstadoNot(Long cursoId, EstadoInscripcionCurso estado);
 }

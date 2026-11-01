@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface AulaRepositorio extends JpaRepository<Aula, Long> {
     List<Aula> findBySedeIdOrderByCodigo(Long sedeId);
+    boolean existsBySedeIdAndCodigoIgnoreCase(Long sedeId, String codigo);
 }

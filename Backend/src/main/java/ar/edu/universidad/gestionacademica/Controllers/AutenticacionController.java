@@ -1,6 +1,7 @@
 package ar.edu.universidad.gestionacademica.Controllers;
 
 import ar.edu.universidad.gestionacademica.BusinessLogic.UsuarioServicio;
+import ar.edu.universidad.gestionacademica.Excepciones.CredencialesInvalidasException;
 import ar.edu.universidad.gestionacademica.Modelos.LoginUsuarioDto;
 import ar.edu.universidad.gestionacademica.Modelos.UsuarioDto;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,6 +37,7 @@ public class AutenticacionController {
             SecurityContext contexto = SecurityContextHolder.createEmptyContext();
             contexto.setAuthentication(autenticacion);
             SecurityContextHolder.setContext(contexto);
+            if (request.getSession(false) != null) request.changeSessionId();
             contextoSesion.saveContext(contexto, request, response);
             return usuarios.buscarPorEmail(autenticacion.getName());
         } catch (AuthenticationException ex) {
@@ -55,7 +57,4 @@ public class AutenticacionController {
         if (sesion != null) sesion.invalidate();
         SecurityContextHolder.clearContext();
     }
-
-    @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    private static class CredencialesInvalidasException extends RuntimeException { }
 }

@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -24,6 +25,7 @@ public class PlanEstudioPdfServicio {
     private static final float MARGEN = 50f;
     private static final float ALTO_PAGINA = PDRectangle.A4.getHeight();
     private static final float INTERLINEA = 16f;
+    private static final float ANCHO_UTIL = PDRectangle.A4.getWidth() - 2 * MARGEN;
 
     private final PlanEstudioRepositorio planes;
     private final AsignaturaRepositorio asignaturas;
@@ -86,13 +88,47 @@ public class PlanEstudioPdfServicio {
         }
 
         void linea(PDType1Font fuente, float tamanio, String texto) throws IOException {
-            if (y < MARGEN + INTERLINEA) nuevaPagina();
-            contenido.beginText();
-            contenido.setFont(fuente, tamanio);
-            contenido.newLineAtOffset(MARGEN, y);
-            contenido.showText(texto);
-            contenido.endText();
-            y -= INTERLINEA;
+            for (String renglon : renglones(fuente, tamanio, imprimible(fuente, texto))) {
+                if (y < MARGEN + INTERLINEA) nuevaPagina();
+                contenido.beginText();
+                contenido.setFont(fuente, tamanio);
+                contenido.newLineAtOffset(MARGEN, y);
+                contenido.showText(renglon);
+                contenido.endText();
+                y -= INTERLINEA;
+            }
+        }
+
+        /** Las fuentes estándar sólo codifican WinAnsi: emojis u otros alfabetos harían fallar el PDF. */
+        private String imprimible(PDType1Font fuente, String texto) throws IOException {
+            StringBuilder resultado = new StringBuilder();
+            for (int indice = 0; indice < texto.length(); ) {
+                int caracter = texto.codePointAt(indice);
+                indice += Character.charCount(caracter);
+                String actual = Character.isWhitespace(caracter) ? " " : Character.toString(caracter);
+                try {
+                    fuente.encode(actual);
+                    resultado.append(actual);
+                } catch (IllegalArgumentException ex) {
+                    resultado.append('?');
+                }
+            }
+            return resultado.toString();
+        }
+
+        private List<String> renglones(PDType1Font fuente, float tamanio, String texto) throws IOException {
+            List<String> resultado = new ArrayList<>();
+            StringBuilder renglon = new StringBuilder();
+            for (char caracter : texto.toCharArray()) {
+                renglon.append(caracter);
+                if (fuente.getStringWidth(renglon.toString()) / 1000 * tamanio > ANCHO_UTIL) {
+                    int corte = Math.max(renglon.lastIndexOf(" "), 1);
+                    resultado.add(renglon.substring(0, corte));
+                    renglon.delete(0, corte);
+                }
+            }
+            resultado.add(renglon.toString());
+            return resultado;
         }
 
         void espacio() {

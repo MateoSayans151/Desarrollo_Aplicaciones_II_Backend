@@ -8,9 +8,14 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static ar.edu.universidad.gestionacademica.Modelos.EstructuraAcademicaDto.*;
 
@@ -22,40 +27,56 @@ public class EstructuraAcademicaServicio {
     private final PlanEstudioRepositorio planes;
     private final AsignaturaRepositorio asignaturas;
     private final CorrelatividadRepositorio correlatividades;
+    private final CursoRepositorio cursos;
+    private final AsignacionAulaRepositorio asignaciones;
 
     public CarreraRespuestaDto crearCarrera(CrearCarreraDto dto) {
         if (carreras.existsByCodigoIgnoreCase(dto.codigo())) {
             throw new ReglaNegocioException("Ya existe una carrera con el codigo indicado");
         }
-        Carrera entidad = Carrera.builder().codigo(dto.codigo()).nombre(dto.nombre())
-                .facultad(dto.facultad()).titulo(dto.titulo()).build();
+        Carrera entidad = Carrera.builder().codigo(dto.codigo()).nombre(dto.nombre().trim())
+                .facultad(dto.facultad().trim()).titulo(dto.titulo().trim()).build();
         return carrera(carreras.save(entidad));
     }
 
     @Transactional(readOnly = true)
     public List<CarreraRespuestaDto> listarCarreras() {
-        return carreras.findAll().stream().map(this::carrera).toList();
+        return carreras.findAll().stream().sorted(Comparator.comparing(Carrera::getCodigo))
+                .map(this::carrera).toList();
     }
 
     public CarreraRespuestaDto actualizarCarrera(Long id, CrearCarreraDto dto) {
         Carrera entidad = buscarCarrera(id);
+        if (carreras.existsByCodigoIgnoreCaseAndIdNot(dto.codigo(), id)) {
+            throw new ReglaNegocioException("Ya existe una carrera con el codigo indicado");
+        }
         entidad.setCodigo(dto.codigo());
-        entidad.setNombre(dto.nombre());
-        entidad.setFacultad(dto.facultad());
-        entidad.setTitulo(dto.titulo());
+        entidad.setNombre(dto.nombre().trim());
+        entidad.setFacultad(dto.facultad().trim());
+        entidad.setTitulo(dto.titulo().trim());
         return carrera(entidad);
     }
 
     public void eliminarCarrera(Long id) {
         Carrera entidad = buscarCarrera(id);
+        if (cursos.existsByAsignaturaPlanCarreraIdAndEstadoIn(id,
+                List.of(EstadoCurso.PLANIFICADO, EstadoCurso.EN_CURSO))) {
+            throw new ReglaNegocioException("No se puede desactivar una carrera con cursos planificados o en curso");
+        }
         entidad.setEstado(EstadoAcademico.INACTIVA);
     }
 
     public PlanRespuestaDto crearPlan(Long carreraId, CrearPlanDto dto) {
-        PlanEstudio plan = PlanEstudio.builder().codigo(dto.codigo()).nombre(dto.nombre())
+        Carrera carrera = buscarCarrera(carreraId);
+        validarCarreraActiva(carrera);
+        validarVigencia(dto.vigenciaDesde());
+        if (planes.existsByCarreraIdAndCodigo(carreraId, dto.codigo())) {
+            throw new ReglaNegocioException("Ya existe un plan con ese código en la carrera");
+        }
+        PlanEstudio plan = PlanEstudio.builder().codigo(dto.codigo()).nombre(dto.nombre().trim())
                 .vigenciaDesde(dto.vigenciaDesde()).cantidadAsignaturas(0)
                 .estado(EstadoPlanEstudio.PLANIFICADO)
-                .carrera(buscarCarrera(carreraId)).build();
+                .carrera(carrera).build();
         return plan(planes.save(plan));
     }
 
@@ -70,8 +91,13 @@ public class EstructuraAcademicaServicio {
         if (entidad.getEstado() == EstadoPlanEstudio.ACTIVO && dto.estado() != EstadoPlanEstudio.ACTIVO) {
             throw new ReglaNegocioException("Un plan activo no puede cambiar de estado");
         }
+        validarVigencia(dto.vigenciaDesde());
+        if (dto.estado() == EstadoPlanEstudio.ACTIVO) validarActivacion(entidad, dto);
+        if (planes.existsByCarreraIdAndCodigoAndIdNot(entidad.getCarrera().getId(), dto.codigo(), planId)) {
+            throw new ReglaNegocioException("Ya existe un plan con ese código en la carrera");
+        }
         entidad.setCodigo(dto.codigo());
-        entidad.setNombre(dto.nombre());
+        entidad.setNombre(dto.nombre().trim());
         entidad.setVigenciaDesde(dto.vigenciaDesde());
         entidad.setEstado(dto.estado());
         return plan(entidad);
@@ -81,6 +107,9 @@ public class EstructuraAcademicaServicio {
         PlanEstudio entidad = buscarPlan(planId);
         if (entidad.getEstado() != EstadoPlanEstudio.PLANIFICADO) {
             throw new ReglaNegocioException("Solo se pueden eliminar planes en estado PLANIFICADO");
+        }
+        if (cursos.existsByAsignaturaPlanId(planId) || asignaciones.existsByAsignaturaPlanId(planId)) {
+            throw new ReglaNegocioException("No se puede eliminar un plan con cursos o asignaciones de aula");
         }
         Carrera carrera = entidad.getCarrera();
         correlatividades.deleteByPlanId(planId);
@@ -92,7 +121,11 @@ public class EstructuraAcademicaServicio {
 
     public AsignaturaRespuestaDto crearAsignatura(Long planId, CrearAsignaturaDto dto) {
         PlanEstudio plan = buscarPlan(planId);
-        Asignatura asignatura = Asignatura.builder().codigo(dto.codigo()).nombre(dto.nombre())
+        validarCarreraActiva(plan.getCarrera());
+        if (asignaturas.existsByPlanIdAndCodigo(planId, dto.codigo())) {
+            throw new ReglaNegocioException("Ya existe una asignatura con ese código en el plan");
+        }
+        Asignatura asignatura = Asignatura.builder().codigo(dto.codigo()).nombre(dto.nombre().trim())
                 .anio(dto.anio()).creditos(dto.creditos()).cargaHoraria(dto.cargaHoraria())
                 .plan(plan).build();
         Asignatura guardada = asignaturas.saveAndFlush(asignatura);
@@ -120,6 +153,13 @@ public class EstructuraAcademicaServicio {
         if (correlatividades.existsByAsignaturaIdAndCorrelativaId(asignaturaId, dto.correlativaId())) {
             throw new ReglaNegocioException("La materia ya está configurada como correlativa para esta asignatura");
         }
+        if (requerida.getAnio() > destino.getAnio()) {
+            throw new ReglaNegocioException("Una correlativa no puede ser de un año posterior al de la asignatura");
+        }
+        if (generaCiclo(asignaturaId, dto.correlativaId())) {
+            throw new ReglaNegocioException("La correlatividad generaría un ciclo: "
+                    + requerida.getCodigo() + " ya depende de " + destino.getCodigo());
+        }
         try {
             Correlatividad entidad = correlatividades.saveAndFlush(Correlatividad.builder().asignatura(destino)
                     .correlativa(requerida).tipo(dto.tipo()).build());
@@ -146,6 +186,39 @@ public class EstructuraAcademicaServicio {
         return new CondicionesRegularidadRespuestaDto(asignatura.getId(), condiciones);
     }
 
+    /** Busca si la materia requerida ya depende, directa o indirectamente, de la asignatura. */
+    private boolean generaCiclo(Long asignaturaId, Long requeridaId) {
+        Deque<Long> pendientes = new ArrayDeque<>(List.of(requeridaId));
+        Set<Long> visitadas = new HashSet<>();
+        while (!pendientes.isEmpty()) {
+            Long actual = pendientes.pop();
+            if (actual.equals(asignaturaId)) return true;
+            if (!visitadas.add(actual)) continue;
+            correlatividades.findByAsignaturaId(actual)
+                    .forEach(requisito -> pendientes.push(requisito.getCorrelativa().getId()));
+        }
+        return false;
+    }
+    private void validarCarreraActiva(Carrera carrera) {
+        if (carrera.getEstado() == EstadoAcademico.INACTIVA) {
+            throw new ReglaNegocioException("La carrera está inactiva");
+        }
+    }
+    private void validarVigencia(LocalDate vigenciaDesde) {
+        if (vigenciaDesde.getYear() < 2000 || vigenciaDesde.getYear() > 2100) {
+            throw new ReglaNegocioException("La vigencia del plan debe estar entre los años 2000 y 2100");
+        }
+    }
+    private void validarActivacion(PlanEstudio plan, ActualizarPlanDto dto) {
+        if (dto.vigenciaDesde().getYear() > LocalDate.now().getYear()) {
+            throw new ReglaNegocioException("Un plan con vigencia en un año futuro debe quedar PLANIFICADO");
+        }
+        if (asignaturas.countByPlanId(plan.getId()) == 0) {
+            throw new ReglaNegocioException("Un plan sin asignaturas no puede activarse");
+        }
+        validarCarreraActiva(plan.getCarrera());
+    }
+
     private Carrera buscarCarrera(Long id) {
         return carreras.findById(id).orElseThrow(() -> new RecursoNoEncontradoException("Carrera no encontrada"));
     }
@@ -157,7 +230,7 @@ public class EstructuraAcademicaServicio {
     }
     private CarreraRespuestaDto carrera(Carrera c) {
         PlanEstudio ultimoPlanActivo = planes
-                .findFirstByCarreraIdAndEstadoOrderByIdDesc(c.getId(), EstadoPlanEstudio.ACTIVO)
+                .findFirstByCarreraIdAndEstadoOrderByVigenciaDesdeDescIdDesc(c.getId(), EstadoPlanEstudio.ACTIVO)
                 .orElse(null);
         return new CarreraRespuestaDto(c.getId(), c.getCodigo(), c.getNombre(), c.getFacultad(),
                 c.getDuracion(), c.getTitulo(), c.getEstado(),

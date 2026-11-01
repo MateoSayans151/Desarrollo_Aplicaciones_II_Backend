@@ -148,12 +148,12 @@ class PlanificacionServicioTest {
 
     @Test
     void rechazaAsignacionPuntualCuandoElAulaEstaOcupadaPorUnCurso() {
-        var fecha = LocalDate.of(2026, 10, 5);
+        var fecha = LocalDate.now().plusDays(1);
         var aula = Aula.builder().id(4L).tipo(ar.edu.universidad.gestionacademica.Entidades.TipoUbicacion.AULA)
                 .capacidadMaxima(40).build();
         when(aulas.findById(4L)).thenReturn(Optional.of(aula));
-        when(asignaturas.findById(8L)).thenReturn(Optional.of(Asignatura.builder().id(8L).build()));
-        when(cursos.countOcupacionesEnFecha(4L, DayOfWeek.MONDAY, fecha,
+        when(asignaturas.findById(8L)).thenReturn(Optional.of(Asignatura.builder().id(8L).plan(ar.edu.universidad.gestionacademica.Entidades.PlanEstudio.builder().estado(ar.edu.universidad.gestionacademica.Entidades.EstadoPlanEstudio.ACTIVO).carrera(ar.edu.universidad.gestionacademica.Entidades.Carrera.builder().build()).build()).build()));
+        when(cursos.countOcupacionesEnFecha(4L, fecha.getDayOfWeek(), fecha,
                 LocalTime.of(10, 0), LocalTime.of(12, 0), EstadoCurso.CANCELADO)).thenReturn(1L);
         var dto = new PlanificacionDto.CrearAsignacionDto(4L, 8L, fecha,
                 LocalTime.of(10, 0), LocalTime.of(12, 0), 30);

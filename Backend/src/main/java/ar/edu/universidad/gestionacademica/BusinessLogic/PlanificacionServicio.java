@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,6 +20,9 @@ import static ar.edu.universidad.gestionacademica.Modelos.PlanificacionDto.*;
 @RequiredArgsConstructor
 @Transactional
 public class PlanificacionServicio {
+    private static final LocalTime HORA_APERTURA = LocalTime.of(7, 0);
+    private static final LocalTime HORA_CIERRE = LocalTime.of(23, 0);
+
     private final SedeRepositorio sedes;
     private final AulaRepositorio aulas;
     private final AsignaturaRepositorio asignaturas;
@@ -28,16 +32,23 @@ public class PlanificacionServicio {
     private final TurnoExamenRepositorio turnos;
 
     public SedeRespuestaDto crearSede(CrearSedeDto dto) {
-        Sede s = sedes.save(Sede.builder().nombre(dto.nombre().trim()).direccion(dto.direccion().trim()).build());
+        String nombre = dto.nombre().trim();
+        if (sedes.existsByNombreIgnoreCase(nombre)) {
+            throw new ReglaNegocioException("Ya existe una sede con ese nombre");
+        }
+        Sede s = sedes.save(Sede.builder().nombre(nombre).direccion(dto.direccion().trim()).build());
         return sede(s);
     }
     @Transactional(readOnly = true)
     public List<SedeRespuestaDto> listarSedes() {
-        return sedes.findAll().stream().map(this::sede).toList();
+        return sedes.findAll().stream().sorted(Comparator.comparing(Sede::getNombre)).map(this::sede).toList();
     }
     public AulaRespuestaDto crearAula(Long sedeId, CrearAulaDto dto) {
         Sede sede = sedes.findById(sedeId).orElseThrow(() -> new RecursoNoEncontradoException("Sede no encontrada"));
         String codigo = dto.codigo().trim();
+        if (aulas.existsBySedeIdAndCodigoIgnoreCase(sedeId, codigo)) {
+            throw new ReglaNegocioException("Ya existe un aula con ese código en la sede");
+        }
         String nombre = dto.nombre() == null || dto.nombre().isBlank() ? codigo : dto.nombre().trim();
         Aula a = aulas.save(Aula.builder().codigo(codigo).nombre(nombre)
                 .capacidadMaxima(dto.capacidadMaxima())
@@ -46,15 +57,25 @@ public class PlanificacionServicio {
     }
     @Transactional(readOnly = true)
     public List<AulaRespuestaDto> listarAulas(Long sedeId) {
+        if (!sedes.existsById(sedeId)) {
+            throw new RecursoNoEncontradoException("Sede no encontrada");
+        }
         return aulas.findBySedeIdOrderByCodigo(sedeId).stream().map(this::aula).toList();
     }
     public AsignacionRespuestaDto asignarAula(CrearAsignacionDto dto) {
         if (!dto.horaFin().isAfter(dto.horaInicio())) throw new ReglaNegocioException("La hora de fin debe ser posterior a la de inicio");
+        if (dto.horaInicio().isBefore(HORA_APERTURA) || dto.horaFin().isAfter(HORA_CIERRE)) {
+            throw new ReglaNegocioException("El horario debe estar entre las 07:00 y las 23:00");
+        }
+        if (dto.fecha().isBefore(LocalDate.now())) {
+            throw new ReglaNegocioException("No se puede reservar un aula en una fecha pasada");
+        }
         Aula aula = aulas.findById(dto.aulaId()).orElseThrow(() -> new RecursoNoEncontradoException("Aula no encontrada"));
         if (aula.getTipo() != TipoUbicacion.AULA) {
             throw new ReglaNegocioException("Solo se pueden asignar ubicaciones de tipo AULA a una asignatura");
         }
         Asignatura asignatura = asignaturas.findById(dto.asignaturaId()).orElseThrow(() -> new RecursoNoEncontradoException("Asignatura no encontrada"));
+        CursoServicio.validarAsignaturaPlanificable(asignatura);
         if (dto.cantidadEstudiantes() > aula.getCapacidadMaxima()) throw new ReglaNegocioException("La cantidad de estudiantes supera la capacidad del aula");
         if (asignaciones.existsByAulaIdAndFechaAndHoraInicioLessThanAndHoraFinGreaterThan(dto.aulaId(), dto.fecha(), dto.horaFin(), dto.horaInicio())) {
             throw new ReglaNegocioException("El aula ya esta ocupada en ese horario");
@@ -106,6 +127,15 @@ public class PlanificacionServicio {
         if (dto.inscripcionHasta().isAfter(dto.fechaInicio())) {
             throw new ReglaNegocioException("La inscripcion debe cerrar antes o el mismo dia del inicio del cuatrimestre");
         }
+        if (dto.fechaInicio().getYear() != dto.anio()) {
+            throw new ReglaNegocioException("El cuatrimestre debe comenzar en el año indicado");
+        }
+        if (periodos.existsByAnioAndNumero(dto.anio(), dto.numero())) {
+            throw new ReglaNegocioException("Ya existe ese cuatrimestre para el año indicado");
+        }
+        if (periodos.existsByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(dto.fechaFin(), dto.fechaInicio())) {
+            throw new ReglaNegocioException("Las fechas se superponen con otro período académico");
+        }
         PeriodoAcademico p = periodos.save(PeriodoAcademico.builder().anio(dto.anio()).numero(dto.numero())
                 .fechaInicio(dto.fechaInicio()).fechaFin(dto.fechaFin())
                 .inscripcionDesde(dto.inscripcionDesde()).inscripcionHasta(dto.inscripcionHasta()).build());
@@ -113,18 +143,31 @@ public class PlanificacionServicio {
     }
     @Transactional(readOnly = true)
     public List<PeriodoRespuestaDto> listarPeriodos() {
-        return periodos.findAll().stream().map(this::periodo).toList();
+        return periodos.findAll().stream()
+                .sorted(Comparator.comparing(PeriodoAcademico::getAnio).reversed()
+                        .thenComparing(Comparator.comparing(PeriodoAcademico::getNumero).reversed()))
+                .map(this::periodo).toList();
     }
     public TurnoRespuestaDto crearTurno(CrearTurnoDto dto) {
         validarRango(dto.fechaInicio(), dto.fechaFin(), "turno de examen");
         validarRango(dto.inscripcionDesde(), dto.inscripcionHasta(), "inscripcion");
-        if (dto.inscripcionHasta().isAfter(dto.fechaInicio())) throw new ReglaNegocioException("La inscripcion debe cerrar antes del inicio del turno");
-        TurnoExamen t = turnos.save(TurnoExamen.builder().nombre(dto.nombre()).fechaInicio(dto.fechaInicio())
+        if (!dto.inscripcionHasta().isBefore(dto.fechaInicio())) throw new ReglaNegocioException("La inscripcion debe cerrar antes del inicio del turno");
+        String nombre = dto.nombre().trim();
+        if (turnos.existsByNombreIgnoreCase(nombre)) {
+            throw new ReglaNegocioException("Ya existe un turno de examen con ese nombre");
+        }
+        if (turnos.existsByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(dto.fechaFin(), dto.fechaInicio())) {
+            throw new ReglaNegocioException("Las fechas se superponen con otro turno de examen");
+        }
+        TurnoExamen t = turnos.save(TurnoExamen.builder().nombre(nombre).fechaInicio(dto.fechaInicio())
                 .fechaFin(dto.fechaFin()).inscripcionDesde(dto.inscripcionDesde()).inscripcionHasta(dto.inscripcionHasta()).build());
         return turno(t);
     }
     @Transactional(readOnly = true)
-    public List<TurnoRespuestaDto> listarTurnos() { return turnos.findAll().stream().map(this::turno).toList(); }
+    public List<TurnoRespuestaDto> listarTurnos() {
+        return turnos.findAll().stream().sorted(Comparator.comparing(TurnoExamen::getFechaInicio).reversed())
+                .map(this::turno).toList();
+    }
 
     private void validarRango(LocalDate inicio, LocalDate fin, String nombre) {
         if (!fin.isAfter(inicio)) throw new ReglaNegocioException("El fin de " + nombre + " debe ser posterior al inicio");

@@ -39,10 +39,10 @@ public final class CursoDto {
 
     public record ActualizarEstadoCursoDto(@NotNull EstadoCurso estado) { }
 
-    public record CrearCursoDocenteDto(@NotBlank String docenteId, @NotNull RolDocenteCurso rol) { }
+    public record CrearCursoDocenteDto(@NotBlank @Size(max = 100) String docenteId, @NotNull RolDocenteCurso rol) { }
     public record CursoDocenteRespuestaDto(Long id, String docenteId, RolDocenteCurso rol) { }
 
-    public record CrearInscripcionCursoDto(@NotBlank String alumnoId) { }
+    public record CrearInscripcionCursoDto(@NotBlank @Size(max = 100) String alumnoId) { }
     public record ActualizarInscripcionCursoDto(@NotNull EstadoInscripcionCurso estado,
                                                  @DecimalMin("0.0") @DecimalMax("10.0") BigDecimal notaFinal,
                                                  LocalDate fechaResultado) { }

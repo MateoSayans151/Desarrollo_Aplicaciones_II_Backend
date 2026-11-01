@@ -39,7 +39,7 @@ class CursoServicioTest {
         PeriodoAcademico periodo = PeriodoAcademico.builder().id(8L)
                 .fechaInicio(LocalDate.of(2026, 8, 1)).fechaFin(LocalDate.of(2026, 11, 30)).build();
         when(periodos.findById(8L)).thenReturn(Optional.of(periodo));
-        when(asignaturas.findById(15L)).thenReturn(Optional.of(Asignatura.builder().id(15L).build()));
+        when(asignaturas.findById(15L)).thenReturn(Optional.of(Asignatura.builder().id(15L).plan(PlanEstudio.builder().estado(EstadoPlanEstudio.ACTIVO).carrera(Carrera.builder().build()).build()).build()));
         when(sedes.findById(2L)).thenReturn(Optional.of(Sede.builder().id(2L).build()));
         when(aulas.findById(3L)).thenReturn(Optional.of(Aula.builder().id(3L)
                 .sede(Sede.builder().id(2L).build()).tipo(TipoUbicacion.AULA).capacidadMaxima(50).build()));
@@ -92,6 +92,83 @@ class CursoServicioTest {
                 .isInstanceOf(ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException.class)
                 .hasMessageContaining("asignación puntual");
         verify(cursos, never()).save(any());
+    }
+
+    private Curso cursoEnEstado(EstadoCurso estado, LocalDate inicio) {
+        return Curso.builder().id(42L).estado(estado).fechaInicio(inicio).fechaFin(inicio.plusDays(90))
+                .sede(Sede.builder().id(2L).build())
+                .asignatura(Asignatura.builder().id(15L).build())
+                .periodo(PeriodoAcademico.builder().id(8L).build()).build();
+    }
+
+    @Test
+    void noPermiteReabrirUnCursoCanceladoNiFinalizado() {
+        for (EstadoCurso estado : List.of(EstadoCurso.CANCELADO, EstadoCurso.FINALIZADO)) {
+            when(cursos.findById(42L)).thenReturn(Optional.of(cursoEnEstado(estado, LocalDate.now())));
+
+            assertThatThrownBy(() -> servicio.actualizarEstado(42L,
+                    new CursoDto.ActualizarEstadoCursoDto(EstadoCurso.PLANIFICADO)))
+                    .hasMessageContaining("no puede pasar");
+        }
+    }
+
+    @Test
+    void noPermiteComenzarUnCursoAntesDeSuFechaDeInicio() {
+        when(cursos.findById(42L)).thenReturn(Optional.of(
+                cursoEnEstado(EstadoCurso.PLANIFICADO, LocalDate.now().plusDays(5))));
+
+        assertThatThrownBy(() -> servicio.actualizarEstado(42L,
+                new CursoDto.ActualizarEstadoCursoDto(EstadoCurso.EN_CURSO)))
+                .hasMessageContaining("fecha de inicio");
+    }
+
+    @Test
+    void rechazaCursoDeUnPlanEnBorrador() {
+        var inicio = LocalDate.now().plusDays(1);
+        when(periodos.findById(8L)).thenReturn(Optional.of(PeriodoAcademico.builder().id(8L)
+                .fechaInicio(inicio).fechaFin(inicio.plusDays(120)).build()));
+        when(aulas.findById(3L)).thenReturn(Optional.of(Aula.builder().id(3L)
+                .sede(Sede.builder().id(2L).build()).tipo(TipoUbicacion.AULA).capacidadMaxima(50).build()));
+        when(asignaturas.findById(15L)).thenReturn(Optional.of(Asignatura.builder().id(15L)
+                .plan(PlanEstudio.builder().estado(EstadoPlanEstudio.PLANIFICADO).build()).build()));
+
+        assertThatThrownBy(() -> servicio.crear(new CursoDto.CrearCursoDto("DDA-001", 15L, 8L, 2L,
+                ModalidadCurso.PRESENCIAL, 45, inicio, inicio.plusDays(90), TurnoCurso.TARDE,
+                LocalTime.of(14, 0), LocalTime.of(18, 0), inicio.getDayOfWeek(), 3L,
+                new BigDecimal("75"), new BigDecimal("6"))))
+                .hasMessageContaining("no está activo");
+        verify(cursos, never()).save(any());
+    }
+
+    @Test
+    void rechazaUnHorarioQueNoCorrespondeAlTurno() {
+        var inicio = LocalDate.now().plusDays(1);
+        when(periodos.findById(8L)).thenReturn(Optional.of(PeriodoAcademico.builder().id(8L)
+                .fechaInicio(inicio).fechaFin(inicio.plusDays(120)).build()));
+
+        assertThatThrownBy(() -> servicio.crear(new CursoDto.CrearCursoDto("DDA-001", 15L, 8L, 2L,
+                ModalidadCurso.PRESENCIAL, 45, inicio, inicio.plusDays(90), TurnoCurso.MAÑANA,
+                LocalTime.of(20, 0), LocalTime.of(22, 0), inicio.getDayOfWeek(), 3L,
+                new BigDecimal("75"), new BigDecimal("6"))))
+                .hasMessageContaining("turno");
+    }
+
+    @Test
+    void reinscribeAUnAlumnoDadoDeBaja() {
+        var curso = cursoEnEstado(EstadoCurso.PLANIFICADO, LocalDate.now().plusDays(30));
+        curso.setCupoMaximo(10);
+        curso.getPeriodo().setInscripcionDesde(LocalDate.now().minusDays(1));
+        curso.getPeriodo().setInscripcionHasta(LocalDate.now().plusDays(1));
+        var baja = InscripcionCurso.builder().id(1L).curso(curso).alumnoId("alumno-1")
+                .estado(EstadoInscripcionCurso.BAJA).fechaInscripcion(LocalDate.now().minusDays(9)).build();
+        when(cursos.findById(42L)).thenReturn(Optional.of(curso));
+        when(inscripciones.findByCursoIdAndAlumnoId(42L, "alumno-1")).thenReturn(Optional.of(baja));
+
+        var respuesta = servicio.inscribirAlumno(42L, new CursoDto.CrearInscripcionCursoDto(" alumno-1 "));
+
+        assertThat(respuesta.estado()).isEqualTo(EstadoInscripcionCurso.INSCRIPTO);
+        assertThat(respuesta.fechaInscripcion()).isEqualTo(LocalDate.now());
+        verify(inscripciones, never()).save(any());
     }
 
     @Test

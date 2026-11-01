@@ -10,6 +10,7 @@ import java.util.List;
 public interface AsignaturaRepositorio extends JpaRepository<Asignatura, Long> {
     List<Asignatura> findByPlanIdOrderByNombreAsc(Long planId);
     long countByPlanId(Long planId);
+    boolean existsByPlanIdAndCodigo(Long planId, String codigo);
 
     @Modifying
     @Query("delete from Asignatura a where a.plan.id = :planId")

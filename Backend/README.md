@@ -34,9 +34,9 @@ Los endpoints de este servicio se implementan bajo `/api/planificacion`,
 se configura por separado. Las comprobaciones de vida están en `GET /health/live`
 y `GET /health/ready`; readiness comprueba la conexión con PostgreSQL.
 
-Los errores de aplicación usan `application/problem+json` e incluyen `code` y
-`correlationId`. Los errores `401` y `403` de Spring Security todavía deben adoptar
-el mismo formato durante la integración con CORE.
+Todos los errores, incluidos los `401` y `403` de Spring Security, usan
+`application/problem+json` e incluyen `code` y `correlationId`. Sin sesión la API
+responde `401`; con sesión pero sin permiso, `403`.
 
 Los códigos nuevos de carreras, planes, asignaturas y cursos usan el formato
 `ARQ-001` o `ARQ1-001` (`^[A-Z]{3}[0-9]?-[0-9]{3}$`). La API rechaza con HTTP 400
@@ -44,10 +44,17 @@ los códigos que no respetan este contrato.
 
 Una materia sólo puede configurarse una vez como correlativa de otra. Los intentos de
 repetirla con el mismo tipo o con un tipo diferente responden HTTP 400 como regla de
-negocio, en lugar de propagar un error de persistencia.
+negocio, en lugar de propagar un error de persistencia. Tampoco se aceptan ciclos ni
+correlativas de un año posterior al de la asignatura.
+
+Los planes nacen en `PLANIFICADO` (borrador) y sólo pueden pasar a `ACTIVO` si tienen
+asignaturas y su vigencia no pertenece a un año futuro: pueden convivir planes activos
+del año actual y de años anteriores junto con el borrador de un plan futuro. Un plan
+activo no vuelve a planificado ni se elimina. Sólo las asignaturas de planes activos
+de carreras no inactivas admiten cursos y reservas de aula.
 
 Al crear un aula con `POST /api/planificacion/sedes/{id}/aulas`, se puede enviar
-`nombre` además de `codigo` y `capacidadMaxima`. Si se omite, se utiliza su código.
+`nombre` además de `codigo` y `capacidadMaxima` (entre 1 y 100). Si se omite, se utiliza su código.
 Las sedes ya tienen nombre. La base existente no necesita migración para exponerlos
 en las respuestas de cursos.
 
@@ -63,7 +70,7 @@ en las respuestas de cursos.
 
 ## Funcionalidades
 
-- Carreras con duración calculada según sus materias, planes de estudio, asignaturas y correlatividades.
+- Carreras con duración calculada según sus materias, planes de estudio con estado, exportación a PDF, asignaturas y correlatividades.
 - Sedes, aulas, capacidad, agenda y detección de superposición horaria.
 - Cuatrimestres y turnos de examen final.
 - Cursos/comisiones por cuatrimestre, con docentes, inscripciones y horarios de aula.
@@ -94,6 +101,13 @@ Al recuperar una base creada con una versión anterior, aplicá una migración d
 datos antes de usar `DDL_AUTO=update`: PostgreSQL no puede agregar una columna
 obligatoria sobre períodos existentes sin asignarles un valor.
 
+`DDL_AUTO=update` no modifica restricciones existentes. Una base creada antes de los
+estados `PLANIFICADO`/`ACTIVO` necesita `docker/migrations/07-plan-estados-y-correlatividad-unica.sql`;
+sin ella, crear un plan falla por el check de `planes_estudio`. Con las tablas
+académicas vacías, `docker/seed-registros-prueba-supabase.sql` carga datos de
+demostración coherentes con las reglas de negocio, incluidos planes 2025 y 2026 activos
+y un plan 2027 planificado. Sus fechas fijas fueron pensadas para fines de 2026.
+
 ### Conectar al PostgreSQL de Docker
 
 Desde esta carpeta, iniciá Docker y el perfil local:
@@ -123,15 +137,17 @@ La especificación OpenAPI en formato JSON está disponible en `http://localhost
 
 Estas credenciales son únicamente para desarrollo. En un entorno real se deben definir
 `UNIVERSIDAD_ADMIN_EMAIL`, `UNIVERSIDAD_ADMIN_PASSWORD` y `UNIVERSIDAD_DOMINIO_EMAIL`, o
-reemplazar la autenticación en memoria por OAuth2/SSO de la universidad.
+reemplazar la autenticación local por OAuth2/SSO de la universidad.
 
 ## Endpoints principales
 
 | Método | Ruta | Operación |
 |---|---|---|
 | POST / GET | `/api/academica/carreras` | Crear/listar carreras |
+| GET | `/api/academica/carreras/con-ultimo-plan-activo` | Listar carreras con su plan activo de vigencia más reciente |
 | PUT / DELETE | `/api/academica/carreras/{id}` | Editar/desactivar carrera |
 | POST / GET | `/api/academica/carreras/{id}/planes` | Crear/listar planes |
+| PUT / DELETE | `/api/academica/planes/{id}` | Editar o activar un plan/eliminar un plan planificado sin cursos ni reservas |
 | GET | `/api/academica/planes/{id}/pdf` | Descargar el plan de estudios (con asignaturas y correlatividades) en PDF |
 | POST / GET | `/api/academica/planes/{id}/asignaturas` | Crear/listar asignaturas |
 | POST / GET | `/api/academica/asignaturas/{id}/correlatividades` | Crear correlativas y consultar condiciones agrupadas por tipo; cada materia incluye ID, código y nombre |
@@ -164,7 +180,8 @@ reemplazar la autenticación en memoria por OAuth2/SSO de la universidad.
 Salvo health, Swagger y login, todas las rutas requieren una sesión local válida.
 Las operaciones bajo `/api/academica/**`, `/api/planificacion/**` y el resto de la API
 administrativa aceptan `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN`. Un usuario con
-permiso `USUARIO` recibe HTTP 403.
+permiso `USUARIO` recibe HTTP 403 en ellas, aunque puede consultar `/api/auth/me` y
+cerrar su sesión.
 
 ### Ejemplo de login
 

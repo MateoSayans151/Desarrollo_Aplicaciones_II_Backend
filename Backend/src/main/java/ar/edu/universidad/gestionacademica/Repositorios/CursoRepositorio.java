@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -18,10 +19,15 @@ public interface CursoRepositorio extends JpaRepository<Curso, Long> {
     List<Curso> findAll();
     @EntityGraph(attributePaths = {"asignatura", "periodo", "sede", "aula"})
     List<Curso> findByPeriodoIdOrderByCodigo(Long periodoId);
-    boolean existsByAulaIdAndDiaSemanaAndPeriodoIdAndHoraInicioLessThanAndHoraFinGreaterThan(
-            Long aulaId, DayOfWeek diaSemana, Long periodoId, LocalTime horaFin, LocalTime horaInicio);
-    boolean existsByAulaIdAndDiaSemanaAndPeriodoIdAndHoraInicioLessThanAndHoraFinGreaterThanAndIdNot(
-            Long aulaId, DayOfWeek diaSemana, Long periodoId, LocalTime horaFin, LocalTime horaInicio, Long id);
+    boolean existsByPeriodoIdAndCodigo(Long periodoId, String codigo);
+    boolean existsByAsignaturaPlanId(Long planId);
+    boolean existsByAsignaturaPlanCarreraIdAndEstadoIn(Long carreraId, Collection<EstadoCurso> estados);
+    boolean existsByAulaIdAndDiaSemanaAndPeriodoIdAndEstadoNotAndHoraInicioLessThanAndHoraFinGreaterThan(
+            Long aulaId, DayOfWeek diaSemana, Long periodoId, EstadoCurso estadoExcluido,
+            LocalTime horaFin, LocalTime horaInicio);
+    boolean existsByAulaIdAndDiaSemanaAndPeriodoIdAndEstadoNotAndHoraInicioLessThanAndHoraFinGreaterThanAndIdNot(
+            Long aulaId, DayOfWeek diaSemana, Long periodoId, EstadoCurso estadoExcluido,
+            LocalTime horaFin, LocalTime horaInicio, Long id);
 
     @Query("""
             select count(c) from Curso c

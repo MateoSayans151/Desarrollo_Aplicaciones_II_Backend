@@ -50,7 +50,7 @@ CREATE TABLE correlatividades (
     asignatura_id BIGINT NOT NULL REFERENCES asignaturas(id),
     correlativa_id BIGINT NOT NULL REFERENCES asignaturas(id),
     tipo VARCHAR(30) NOT NULL,
-    CONSTRAINT uk_correlatividad UNIQUE (asignatura_id, correlativa_id, tipo)
+    CONSTRAINT uk_correlatividad_par UNIQUE (asignatura_id, correlativa_id)
 );
 
 CREATE TABLE sedes (
