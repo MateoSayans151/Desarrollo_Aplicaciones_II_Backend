@@ -1,7 +1,6 @@
 package ar.edu.universidad.gestionacademica.Controllers;
 
 import ar.edu.universidad.gestionacademica.BusinessLogic.EstructuraAcademicaServicio;
-import ar.edu.universidad.gestionacademica.BusinessLogic.PlanEstudioPdfServicio;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
@@ -16,7 +15,6 @@ import static ar.edu.universidad.gestionacademica.Modelos.EstructuraAcademicaDto
 @RequiredArgsConstructor
 public class EstructuraAcademicaController {
     private final EstructuraAcademicaServicio servicio;
-    private final PlanEstudioPdfServicio pdfServicio;
 
     @PostMapping("/carreras")
     public ResponseEntity<CarreraRespuestaDto> crearCarrera(@Valid @RequestBody CrearCarreraDto dto) {
@@ -48,15 +46,6 @@ public class EstructuraAcademicaController {
     @DeleteMapping("/planes/{planId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void eliminarPlan(@PathVariable Long planId) { servicio.eliminarPlan(planId); }
-
-    @GetMapping("/planes/{planId}/pdf")
-    public ResponseEntity<byte[]> descargarPlanPdf(@PathVariable Long planId) {
-        byte[] pdf = pdfServicio.generar(planId);
-        return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_PDF)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"plan-estudios-" + planId + ".pdf\"")
-                .body(pdf);
-    }
 
     @PostMapping("/planes/{planId}/asignaturas")
     @ResponseStatus(HttpStatus.CREATED)

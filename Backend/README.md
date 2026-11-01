@@ -70,7 +70,7 @@ en las respuestas de cursos.
 
 ## Funcionalidades
 
-- Carreras con duración calculada según sus materias, planes de estudio con estado, exportación a PDF, asignaturas y correlatividades.
+- Carreras con duración calculada según sus materias, planes de estudio con estado, asignaturas y correlatividades.
 - Sedes, aulas, capacidad, agenda y detección de superposición horaria.
 - Cuatrimestres y turnos de examen final.
 - Cursos/comisiones por cuatrimestre, con docentes, inscripciones y horarios de aula.
@@ -148,7 +148,6 @@ reemplazar la autenticación local por OAuth2/SSO de la universidad.
 | PUT / DELETE | `/api/academica/carreras/{id}` | Editar/desactivar carrera |
 | POST / GET | `/api/academica/carreras/{id}/planes` | Crear/listar planes |
 | PUT / DELETE | `/api/academica/planes/{id}` | Editar o activar un plan/eliminar un plan planificado sin cursos ni reservas |
-| GET | `/api/academica/planes/{id}/pdf` | Descargar el plan de estudios (con asignaturas y correlatividades) en PDF |
 | POST / GET | `/api/academica/planes/{id}/asignaturas` | Crear/listar asignaturas |
 | POST / GET | `/api/academica/asignaturas/{id}/correlatividades` | Crear correlativas y consultar condiciones agrupadas por tipo; cada materia incluye ID, código y nombre |
 | POST / GET | `/api/planificacion/sedes` | Crear/listar sedes |

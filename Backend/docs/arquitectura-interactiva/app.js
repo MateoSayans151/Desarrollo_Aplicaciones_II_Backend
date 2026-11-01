@@ -26,7 +26,7 @@ const flows = [
       ["Crear el plan", "Se vincula a una carrera existente y conserva su propia versión y estado."],
       ["Agregar asignaturas", "Cada materia queda ubicada por año dentro del plan y actualiza la duración calculada de la carrera."],
       ["Definir correlatividades", "La asignatura previa pertenece al mismo plan y no se permiten autorreferencias."],
-      ["Publicar o exportar", "El plan completo puede consultarse y descargarse en PDF."]
+      ["Consultar el plan", "El plan completo puede consultarse con sus asignaturas y correlatividades."]
     ]
   },
   {
@@ -93,7 +93,6 @@ const endpoints = [
   ["GET", "/api/academica/carreras/{carreraId}/planes", "Estructura", "Listar planes de carrera", "protected", "Identificador de carrera.", "Acota el catálogo a la carrera."],
   ["PUT", "/api/academica/planes/{planId}", "Estructura", "Editar o activar plan", "protected", "Código, nombre, vigencia y estado.", "Sólo se activa con asignaturas y vigencia no futura; un plan activo no retrocede."],
   ["DELETE", "/api/academica/planes/{planId}", "Estructura", "Eliminar plan", "protected", "Identificador de plan.", "Sólo planes PLANIFICADO sin cursos ni reservas de aula."],
-  ["GET", "/api/academica/planes/{planId}/pdf", "Estructura", "Exportar plan en PDF", "protected", "Identificador de plan.", "Incluye estructura y asignaturas del plan."],
   ["POST", "/api/academica/planes/{planId}/asignaturas", "Estructura", "Agregar asignatura", "protected", "Código, nombre, año, créditos y carga horaria.", "Código válido y único; el plan debe existir y la carrera recalcula su duración."],
   ["GET", "/api/academica/planes/{planId}/asignaturas", "Estructura", "Listar asignaturas", "protected", "Identificador de plan.", "Devuelve el orden curricular del plan."],
   ["POST", "/api/academica/asignaturas/{asignaturaId}/correlatividades", "Estructura", "Agregar correlatividad", "protected", "Asignatura previa y condición.", "Mismo plan, sin autorreferencia, duplicados, ciclos ni correlativas de años posteriores."],

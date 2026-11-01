@@ -62,7 +62,6 @@ No existen controladores `/api/usuarios`, ni endpoints para crear o listar usuar
 | `GET` | `/api/academica/carreras/{carreraId}/planes` | Listar planes de una carrera. |
 | `PUT` | `/api/academica/planes/{planId}` | Editar un plan o activarlo. |
 | `DELETE` | `/api/academica/planes/{planId}` | Eliminar un plan `PLANIFICADO` sin cursos ni reservas, junto con sus asignaturas. |
-| `GET` | `/api/academica/planes/{planId}/pdf` | Descargar PDF con asignaturas y correlatividades del plan. |
 | `POST` | `/api/academica/planes/{planId}/asignaturas` | Crear asignatura en un plan. |
 | `GET` | `/api/academica/planes/{planId}/asignaturas` | Listar asignaturas de un plan. |
 | `POST` | `/api/academica/asignaturas/{asignaturaId}/correlatividades` | Agregar correlatividad. |
@@ -148,8 +147,8 @@ integración objetivo deberán transportar el UUID de CORE como texto.
 
 Las consultas devuelven listas de los DTO de respuesta anteriores. El detalle de curso
 devuelve `{ "curso", "docentes", "inscripciones" }`; el listado de inscripciones de un
-alumno anida un resumen completo del curso. La descarga del plan responde
-`application/pdf`; el resto de los endpoints de negocio usa JSON.
+alumno anida un resumen completo del curso. Todos los endpoints de negocio
+usan JSON.
 
 Salvo health, Swagger y login, la configuración actual exige
 `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN` para todas las rutas anteriores.
