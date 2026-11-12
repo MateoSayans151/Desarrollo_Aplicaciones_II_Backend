@@ -261,6 +261,7 @@ public class CursoServicio {
         if (aula.getTipo() != TipoUbicacion.AULA) {
             throw new ReglaNegocioException("Solo se pueden asignar ubicaciones de tipo AULA a un curso");
         }
+        PlanificacionServicio.validarAulaDisponible(aula);
         if (!aula.getSede().getId().equals(sedeId)) {
             throw new ReglaNegocioException("El aula debe pertenecer a la sede del curso");
         }

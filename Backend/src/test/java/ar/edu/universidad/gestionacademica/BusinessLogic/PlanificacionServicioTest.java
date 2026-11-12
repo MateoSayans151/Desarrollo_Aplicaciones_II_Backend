@@ -7,6 +7,7 @@ import ar.edu.universidad.gestionacademica.Entidades.Curso;
 import ar.edu.universidad.gestionacademica.Entidades.EstadoCurso;
 import ar.edu.universidad.gestionacademica.Entidades.Sede;
 import ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException;
+import ar.edu.universidad.gestionacademica.Integracion.Backoffice.PropiedadesBackoffice;
 import ar.edu.universidad.gestionacademica.Modelos.PlanificacionDto;
 import ar.edu.universidad.gestionacademica.Repositorios.*;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,8 @@ class PlanificacionServicioTest {
     private final CursoRepositorio cursos = mock(CursoRepositorio.class);
     private final PlanificacionServicio servicio = new PlanificacionServicio(sedes, aulas,
             asignaturas, asignaciones, cursos,
-            mock(PeriodoAcademicoRepositorio.class), mock(TurnoExamenRepositorio.class));
+            mock(PeriodoAcademicoRepositorio.class), mock(TurnoExamenRepositorio.class),
+            new PropiedadesBackoffice(false, null, null, null, 0, null));
 
     @Test
     void guardaYDevuelveElNombreDelAula() {
@@ -162,6 +164,35 @@ class PlanificacionServicioTest {
                 .isInstanceOf(ReglaNegocioException.class)
                 .hasMessageContaining("ocupada por un curso");
         verify(asignaciones, never()).save(any());
+    }
+
+    @Test
+    void rechazaReservarUnAulaEnMantenimientoEnBackoffice() {
+        var aula = Aula.builder().id(4L).tipo(ar.edu.universidad.gestionacademica.Entidades.TipoUbicacion.AULA)
+                .capacidadMaxima(40).estado("MAINTENANCE").sede(Sede.builder().id(2L).build()).build();
+        when(aulas.findById(4L)).thenReturn(Optional.of(aula));
+        var dto = new PlanificacionDto.CrearAsignacionDto(4L, 8L, LocalDate.now().plusDays(1),
+                LocalTime.of(10, 0), LocalTime.of(12, 0), 30);
+
+        assertThatThrownBy(() -> servicio.asignarAula(dto))
+                .isInstanceOf(ReglaNegocioException.class)
+                .hasMessageContaining("MAINTENANCE");
+        verify(asignaciones, never()).save(any());
+    }
+
+    @Test
+    void conBackofficeActivoNoSeCreanSedesNiAulasLocales() {
+        var integrado = new PlanificacionServicio(sedes, aulas, asignaturas, asignaciones, cursos,
+                mock(PeriodoAcademicoRepositorio.class), mock(TurnoExamenRepositorio.class),
+                new PropiedadesBackoffice(true, "https://bo", null, null, 100, null));
+
+        assertThatThrownBy(() -> integrado.crearSede(new PlanificacionDto.CrearSedeDto("Sede", "Av. 1")))
+                .isInstanceOf(ReglaNegocioException.class)
+                .hasMessageContaining("Backoffice");
+        assertThatThrownBy(() -> integrado.crearAula(2L, new PlanificacionDto.CrearAulaDto("A-1", 30, null)))
+                .isInstanceOf(ReglaNegocioException.class);
+        verify(sedes, never()).save(any());
+        verify(aulas, never()).save(any());
     }
 
     @Test

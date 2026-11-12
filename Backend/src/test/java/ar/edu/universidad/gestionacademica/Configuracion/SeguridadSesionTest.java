@@ -6,6 +6,8 @@ import ar.edu.universidad.gestionacademica.Controllers.AutenticacionController;
 import ar.edu.universidad.gestionacademica.Controllers.CursoController;
 import ar.edu.universidad.gestionacademica.Entidades.Usuario;
 import ar.edu.universidad.gestionacademica.Modelos.UsuarioDto;
+import ar.edu.universidad.gestionacademica.Repositorios.CursoDocenteRepositorio;
+import ar.edu.universidad.gestionacademica.Seguridad.AccesoAcademico;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -24,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest({AutenticacionController.class, CursoController.class})
-@Import({ConfiguracionSeguridad.class, ManejadorErrores.class})
+@Import({ConfiguracionSeguridad.class, ManejadorErrores.class, AccesoAcademico.class})
 class SeguridadSesionTest {
     @Autowired
     private MockMvc mvc;
@@ -32,6 +34,8 @@ class SeguridadSesionTest {
     private UsuarioServicio usuarios;
     @MockBean
     private CursoServicio cursos;
+    @MockBean
+    private CursoDocenteRepositorio docentes;
 
     @Test
     void sinSesionRespondeUnauthorizedConProblemJson() throws Exception {
@@ -56,7 +60,7 @@ class SeguridadSesionTest {
     @Test
     @WithMockUser(username = "alumno@universidad.edu.ar", roles = "USUARIO")
     void unUsuarioSinPermisoRecibeForbiddenConProblemJson() throws Exception {
-        mvc.perform(get("/api/planificacion/cursos"))
+        mvc.perform(get("/api/v1/planificacion/cursos"))
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
@@ -65,10 +69,10 @@ class SeguridadSesionTest {
     @Test
     @WithMockUser(roles = "ADMINISTRATIVO")
     void losErroresDeFormatoRespondenBadRequestYNoServerError() throws Exception {
-        mvc.perform(get("/api/planificacion/cursos/abc"))
+        mvc.perform(get("/api/v1/planificacion/cursos/abc"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-        mvc.perform(post("/api/planificacion/cursos").contentType(MediaType.APPLICATION_JSON).content("{roto"))
+        mvc.perform(post("/api/v1/planificacion/cursos").contentType(MediaType.APPLICATION_JSON).content("{roto"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }

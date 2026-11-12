@@ -1,5 +1,7 @@
--- Esquema local de desarrollo. Debe coincidir con las entidades JPA del proyecto.
--- Este archivo se ejecuta solamente al crear un volumen PostgreSQL vacio.
+-- Esquema local de desarrollo. Debe coincidir con las entidades JPA del proyecto:
+-- el perfil local arranca con ddl-auto=validate.
+-- Docker ejecuta los archivos de esta carpeta en orden alfabético y sólo cuando el
+-- volumen de PostgreSQL está vacío. Los datos de prueba se cargan en 02-datos-prueba.sql.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -151,39 +153,15 @@ CREATE TABLE turnos_examen (
     inscripcion_hasta DATE NOT NULL
 );
 
+-- Inbox de eventos consumidos desde CORE: deduplica por eventId.
+CREATE TABLE eventos_recibidos (
+    event_id VARCHAR(100) PRIMARY KEY,
+    tipo VARCHAR(150) NOT NULL,
+    recibido_en TIMESTAMP(6) WITH TIME ZONE NOT NULL
+);
+
 -- Credenciales: admin@universidad.edu.ar / CambiarEstaClave123!
 -- pgcrypto genera un hash BCrypt; el backend lo valida con BCryptPasswordEncoder.
 INSERT INTO usuarios (nombre, email, password, permiso, activo)
 VALUES ('Administrador', 'admin@universidad.edu.ar',
         crypt('CambiarEstaClave123!', gen_salt('bf', 12)), 'ADMINISTRATIVO', TRUE);
-
-INSERT INTO carreras (codigo, nombre, facultad, duracion, titulo, estado)
-VALUES ('LGTI', 'Licenciatura en Gestión de Tecnologías de la Información',
-        'Facultad de Ingeniería y Ciencias Exactas', '4 años',
-        'Licenciado/a en Gestión de Tecnologías de la Información', 'ACTIVA');
-
-INSERT INTO planes_estudio (codigo, nombre, vigencia_desde, cantidad_asignaturas, estado, carrera_id)
-SELECT 'LGTI-2026', 'Plan de estudios LGTI 2026', DATE '2026-01-01', 14, 'ACTIVO', id
-FROM carreras WHERE codigo = 'LGTI';
-
-INSERT INTO asignaturas (codigo, nombre, anio, creditos, carga_horaria, estado, plan_id)
-SELECT datos.codigo, datos.nombre, datos.anio::INTEGER, 6, 64, 'ACTIVA', plan.id
-FROM planes_estudio plan
-CROSS JOIN (
-    VALUES
-      ('LGTI-101', 'Introducción a la Algoritmia', '1'),
-      ('LGTI-102', 'Sistemas de Información I', '1'),
-      ('LGTI-103', 'Arquitectura de Computadores', '1'),
-      ('LGTI-104', 'Marketing', '1'),
-      ('LGTI-105', 'Diseño y Desarrollo Web', '1'),
-      ('LGTI-106', 'Algoritmos y Estructuras de Datos I', '1'),
-      ('LGTI-107', 'Sistemas de Información II', '1'),
-      ('LGTI-108', 'Sistemas Operativos', '1'),
-      ('LGTI-109', 'Matemática Discreta', '1'),
-      ('LGTI-110', 'Testing de Aplicaciones', '1'),
-      ('LGTI-201', 'Algoritmos y Estructuras de Datos II', '2'),
-      ('LGTI-202', 'Paradigma Orientado a Objetos', '2'),
-      ('LGTI-203', 'Diseño y Análisis de Algoritmos', '2'),
-      ('LGTI-204', 'Dirección de Proyectos de Tecnología', '2')
-) AS datos(codigo, nombre, anio)
-WHERE plan.codigo = 'LGTI-2026';

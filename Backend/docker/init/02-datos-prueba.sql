@@ -1,5 +1,7 @@
 -- Datos de demostración coherentes con las reglas de negocio vigentes.
--- Requiere la migración 07 y las tablas académicas vacías; no toca la tabla usuarios.
+-- Docker lo ejecuta automáticamente después de 01-schema-and-data.sql al crear el volumen.
+-- También sirve para Supabase: requiere la migración 07 y las tablas académicas vacías.
+-- No toca la tabla usuarios.
 --
 -- Fechas pensadas para el 2.º cuatrimestre de 2026:
 --   * Planes 2025 y 2026 ACTIVOS; plan 2027 PLANIFICADO (borrador de un plan futuro).

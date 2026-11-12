@@ -1,149 +1,128 @@
-# Integración con CORE: estado y pedidos pendientes
+# Integración con CORE
 
-Revisión realizada el 1 de noviembre de 2026 tomando como referencia el contrato CORE
-v1 del 5 de agosto de 2026. Este documento separa lo que funciona localmente de lo que
-requiere coordinación con CORE u otro módulo.
+Actualizado con la respuesta de CORE del 10/11/2026 (fase 3: integración). Separa lo
+confirmado, lo que falta implementar en este módulo y lo que todavía hay que pedirle a CORE.
 
-## Estado comprobado
+## Confirmado por CORE
 
-| Área | Estado actual |
+### Ruteo
+
+| Tema | Acuerdo |
 | --- | --- |
-| API local | Implementada bajo `/api/**`, con PostgreSQL y sesión `JSESSIONID`. |
-| Frontend | Todas las pantallas activas usan la API local; no queda modo mock ni datos en `localStorage`. |
-| Health | Implementados `GET /health/live` y `GET /health/ready`; readiness devuelve `503 DOWN` si PostgreSQL no responde. |
-| OpenAPI | Disponible en `/v3/api-docs` y Swagger UI en `/swagger-ui.html`. |
-| Gateway CORE | Pendiente. El contrato espera exponer `/api/v1/academic/*` y reescribir a `/api/v1/*`, pero el backend recibe `/api/**`. |
-| Autenticación CORE | Pendiente. La aplicación usa login local; todavía no valida JWT RS256 de CORE. |
-| Errores CORE | Todos los errores, incluidos `401` y `403` de Spring Security, usan `application/problem+json` con `code` y `correlationId`. |
-| Correlación | Los errores conservan o generan `correlationId`; falta propagarlo sistemáticamente en logs, llamadas y eventos. |
-| Eventos publicados | Existe un publicador Rabbit opcional legado para resultados; no cumple el envelope ni la topología de CORE. |
-| Eventos consumidos | Pendientes `teacher.attendance.recorded.v1` y `teacher.exam-result.published.v1`. |
-| Backoffice | El modelo guarda UUID externos, pero falta sincronizar sites y locations. |
+| Gateway | `https://core-api-production-e458.up.railway.app/api/v1/academic/*` |
+| Destino | `ACADEMIC_SERVICE_URL` = `https://desarrolloaplicacionesiibackend-production.up.railway.app` (se la enviamos). |
+| Reescritura | CORE **no** reescribe a `/api/`. Reenvía `/api/v1/academic/{resto}` a `/api/v1/{resto}`. Ejemplo: `/api/v1/academic/academica/carreras` llega como `/api/v1/academica/carreras`. |
+| Endpoints | No se habilitan uno por uno: CORE reenvía todo lo que esté bajo el prefijo, con cualquier método, si trae un JWT válido. La autorización de cada operación es nuestra. |
+| `/api/auth/*` | Para no exponerlo, basta con no moverlo a `/api/v1/`. |
+| Health y OpenAPI | CORE no los consulta; no hace falta `/docs-json`. |
+| Errores | El gateway devuelve nuestro status y body sin cambios. Timeout de 10 s. Tras 5 fallas de conexión seguidas corta 30 s con `503 GATEWAY_CIRCUIT_OPEN`. |
+| Correlación | Hay que propagar el `X-Correlation-Id` recibido. |
+| CORS | El navegador habla con CORE: nuestro backend no necesita CORS para el gateway. Si tenemos front propio, CORE agrega su origen a `CORS_ORIGINS`. |
+| `X-Service-Name` | No se usa. El servicio que llama se identifica con el claim `service` del token de servicio. |
 
-## Qué pedirle a CORE para habilitar nuestros endpoints
+### JWT
 
-Enviar un pedido con estos datos:
+| Campo | Valor |
+| --- | --- |
+| JWKS | `https://core-api-production-e458.up.railway.app/.well-known/jwks.json` |
+| `iss` | `https://core-api-production-e458.up.railway.app` |
+| `aud` | `uadenet` (el mismo para todos los módulos) |
+| Algoritmo | RS256 |
+| `kid` | Tomar la clave por el `kid` del token. Sin rotación automática; ante un `kid` desconocido, releer el JWKS. |
+| Claims extra | `roles`, `careerIds`, `planIds`; en tokens de servicio, `service`. |
 
-1. **Alta del servicio académico** con el valor definitivo de `ACADEMIC_SERVICE_URL`
-   para cada ambiente.
-2. **Decisión de reescritura de rutas**. Nuestro backend recibe `/api/**`; el contrato
-   del gateway reescribe `/api/v1/academic/*` a `/api/v1/*`. CORE debe confirmar una de
-   estas opciones:
-   - configurar temporalmente la reescritura hacia `/api/*`; o
-   - acordar el cambio del backend a `/api/v1/*` y la ruta pública exacta de cada recurso.
-3. **URL base del gateway** para desarrollo, integración y entrega.
-4. **Datos de validación JWT**: JWKS URL, `issuer`, `audience`, algoritmo, nombres de
-   claims y rotación de claves.
-5. **Roles y permisos académicos** que enviará CORE y su correspondencia con lectura y
-   escritura. Hoy se aceptan `ADMINISTRATIVO`, `ADMINISTRADOR` y `ACADEMIC_ADMIN`.
-6. **Credenciales de servicio**: `clientId`, `clientSecret`, `X-Service-Name` esperado y
-   scopes autorizados. Deben entregarse fuera de Git.
-7. **CORS y orígenes permitidos** del portal que llamará al gateway.
-8. **Registro del OpenAPI** y confirmación de las URLs públicas de documentación. El
-   contrato CORE menciona `/docs` y `/docs-json`; hoy Spring expone otras rutas.
-9. **Health checks del gateway** contra `/health/live` y `/health/ready`, incluidos
-   intervalos y timeout.
-10. **Códigos de error de seguridad**: confirmar si CORE acepta `UNAUTHORIZED` y
-    `FORBIDDEN`, que ya se devuelven con `code` y `correlationId`.
+**Firma del gateway.** Como nuestro backend está expuesto públicamente en Railway, hay que
+validar `X-Core-Signature`: HMAC-SHA256 en hexadecimal de estas líneas unidas por `\n`, sin
+salto final:
 
-### Texto listo para enviar a CORE
-
-> Necesitamos dar de alta Gestión Académica en el gateway. Por favor confirmen
-> `ACADEMIC_SERVICE_URL` y la URL del ambiente, y definan cómo se mapeará
-> `/api/v1/academic/*` porque hoy nuestro servicio recibe `/api/*` y el contrato v1
-> indica reescritura a `/api/v1/*`. También necesitamos JWKS URL, issuer, audience,
-> claims, roles/permisos académicos, credenciales y scopes del service account,
-> orígenes CORS y configuración de health checks. Adjuntamos el OpenAPI generado en
-> `/v3/api-docs` y el inventario de endpoints. Las credenciales deben enviarse por un
-> canal seguro y no en el repositorio.
-
-## Eventos que debe coordinar Gestión Académica
-
-Según el catálogo CORE, este módulo debe:
-
-- consumir `teacher.attendance.recorded.v1`;
-- consumir `teacher.exam-result.published.v1`;
-- publicar `academic.exam-scheduled.v1`;
-- publicar `academic.term-defined.v1`.
-
-El publicador local `resultado.publicado` no reemplaza esos eventos. Antes de activarlo
-en un ambiente compartido hay que retirarlo o adaptarlo.
-
-Para consumir eventos se debe abrir un PR en el repositorio de contratos de CORE:
-
-```yaml
-queues:
-  - name: academic.regularity.v1
-    durable: true
-    owner: academic
-    bindings:
-      - exchange: uadenet.events.v1
-        routingKeys:
-          - teacher.attendance.recorded.v1
-          - teacher.exam-result.published.v1
-    deadLetter: uadenet.dlx.v1
-    maxRetries: 3
+```text
+MÉTODO
+ruta de destino (sin query)
+X-User-Id
+X-Correlation-Id
+X-Core-Timestamp
 ```
 
-El nombre final de la cola debe aprobarlo CORE. La implementación consumidora tendrá
-que usar ack manual, una inbox con índice único por `eventId` y persistir el efecto y la
-deduplicación en la misma transacción.
+El secreto lo pasa CORE por privado y va en una variable de entorno.
 
-Para publicar los dos eventos académicos hay que solicitar o confirmar:
+### Permisos
 
-- los JSON Schema en `contracts/events/`;
-- las entradas de AsyncAPI;
-- el scope de publicación del service account académico;
-- el endpoint `POST /internal/v1/events` y su URL de ambiente;
-- las reglas para `subject`, `actor`, `correlationId` e `Idempotency-Key`.
+- Escritura administrativa: rol `ACADEMIC_ADMIN` y permiso `academic:manage` (ya existen).
+  No se crean `academic:read` ni `academic:write`.
+- `STUDENT` y `TEACHER` no traen permisos académicos. Se autorizan por el claim `roles`
+  (o `X-User-Roles`) y validando la propiedad del recurso: el alumno es el mismo `sub`, el
+  docente dicta ese curso.
 
-## Cómo solicitar endpoints de otros módulos
+### Service account `academic-service`
 
-Primero se pide el contrato al equipo propietario del dato. Después se solicita a CORE
-el acceso correspondiente por gateway o por credenciales de servicio. El pedido debe
-incluir:
+Ya tiene `events:publish`, `webhooks:manage` y `backoffice:read`.
 
-- módulo propietario y contacto;
-- caso de uso concreto;
-- método y ruta solicitados;
-- request, response y códigos de error con ejemplos;
-- filtros, paginación y límites;
-- identidad usada: usuario del portal o service account;
-- permisos o scopes mínimos;
-- ambientes y URL base;
-- timeout e idempotencia, si corresponde;
-- OpenAPI o JSON Schema versionado.
+### Eventos
 
-### Solicitud para Backoffice
+| Evento | Dirección | Cola o detalle |
+| --- | --- | --- |
+| `teacher.attendance.recorded.v1` | Consumimos | `academic.teacher-events.v1` (ya existe; usa `teacher.#`, filtrar por routing key). |
+| `teacher.exam-result.published.v1` | Consumimos | `academic.teacher-events.v1`. |
+| `backoffice.location.upserted.v1` | Consumimos | `academic.locations.v1` (creada por CORE). Implementado; ver `INTEGRACION_BACKOFFICE.md`. |
+| `academic.exam-scheduled.v1` | Publicamos | En el catálogo; `source` = `academic`. |
+| `academic.term-defined.v1` | Publicamos | En el catálogo; `source` = `academic`. |
 
-Gestión Académica necesita leer sedes y aulas. Pedir a Backoffice y CORE:
+Se consume con ack manual y deduplicando por `eventId`. No se declaran colas ni bindings
+desde el código. No hace falta la cola `academic.regularity.v1` que habíamos propuesto.
 
-- endpoint interno paginado para sites;
-- endpoint interno paginado para locations filtrable por `siteId` y `type=AULA`;
-- schemas de `siteId`, `locationId`, nombre, dirección, capacidad, tipo y estado;
-- scope de lectura para `academic-service`;
-- URL interna a través de CORE y política de caché/sincronización;
-- comportamiento ante bajas y cambios de capacidad.
+## Estado de este módulo
 
-La ruta pública `/api/v1/backoffice/locations` no alcanza para una llamada
-backend a backend. Debe confirmarse la equivalente `/internal/v1/**` o el mecanismo
-oficial que CORE autorice.
+| Área | Estado |
+| --- | --- |
+| Sincronización con Backoffice | **Implementada** detrás de `BACKOFFICE_ENABLED`. |
+| Consumo de `backoffice.location.upserted.v1` | **Implementado** detrás de `BACKOFFICE_EVENTS_ENABLED`, con inbox `eventos_recibidos`. |
+| Token de servicio | **Implementado**: token fijo (`CORE_SERVICE_TOKEN`) o client credentials (`CORE_SERVICE_TOKEN_URL`). Falta que CORE confirme el endpoint. |
+| Prefijo `/api/v1/*` | **Implementado.** `/api/v1/academica`, `/api/v1/planificacion` y `/api/v1/regularidad`. `/api/auth/*` queda fuera. |
+| Validación de JWT | **Implementada** para todo Bearer: RS256 por `kid` contra el JWKS, `iss` y `aud=uadenet`. Sin Bearer sigue valiendo la sesión local del frontend propio. |
+| Firma del gateway | **Implementada** (`X-Core-Signature`, tolerancia `CORE_GATEWAY_SIGNATURE_TOLERANCE`, 5 min). Se activa al cargar `CORE_GATEWAY_SIGNATURE_SECRET`. Acepta timestamp en segundos, milisegundos o ISO-8601. |
+| Autorización por rol y propiedad | **Implementada.** Ver la tabla de permisos más abajo. |
+| Propagación de `X-Correlation-Id` | **Implementada:** se toma o genera, vuelve en toda respuesta, aparece en los logs y viaja en las llamadas a Backoffice. |
+| Rutas `/internal/v1/**` | **Implementadas:** `carreras`, `carreras/con-ultimo-plan-activo`, `carreras/{id}/planes` y `planes/{id}/asignaturas`. Sólo tokens de servicio; se puede limitar con `CORE_INTERNAL_ALLOWED_SERVICES`. |
+| Eventos `teacher.*` | Pendiente. |
+| Publicación `academic.*` | Pendiente. El publicador Rabbit de Analítica es legado y no cumple el contrato. |
+| Frontend | Usa `/api/v1/**` y sigue llamando directo al backend con sesión local hasta tener el login de CORE. |
 
-### Texto listo para pedir un endpoint a otro equipo
+## Permisos por ruta
 
-> Desde Gestión Académica necesitamos consultar **[recurso]** para **[caso de uso]**.
-> ¿Pueden compartir el método y la ruta oficial, filtros, paginación, request/response,
-> códigos de error, OpenAPI y ambiente? La llamada será **[desde el portal con token de
-> usuario / desde academic-service con token de servicio]**. También necesitamos que
-> CORE confirme el prefijo del gateway y el scope mínimo para habilitarla.
+| Ruta | Quién |
+| --- | --- |
+| `GET /api/v1/academica/**`, `periodos`, `turnos-examen`, `cursos` (listado), `sedes/**`, agendas, `GET /api/v1/regularidad/cursos/{id}` | Administración, `STUDENT` y `TEACHER`. |
+| `GET cursos/{id}`, `/docentes`, `/alumnos`, `/notas` | Administración o el docente asignado al curso. |
+| `PUT cursos/{id}/notas/{alumnoId}`, `PUT cursos/{id}/inscripciones/{alumnoId}`, `PUT /api/v1/regularidad/cursos/{id}` | Administración o el docente asignado al curso. |
+| `GET cursos/{id}/notas/{alumnoId}` | Administración, el docente del curso o el propio alumno. |
+| `GET alumnos/{alumnoId}/inscripciones` | Administración o el propio alumno (`sub`). |
+| `POST cursos/{id}/inscripciones` | Administración, o un `STUDENT` con `alumnoId` igual a su `sub`. |
+| Todo lo demás bajo `/api/v1/**` | Administración: `ACADEMIC_ADMIN`, `academic:manage` o el `ADMINISTRATIVO` local. |
+| `GET /internal/v1/**` | Sólo tokens de servicio (claim `service`). |
 
-## Condiciones para declarar la integración terminada
+Un docente "dicta" un curso cuando su `sub` figura como `docenteId` en `curso_docentes`.
 
-- El gateway alcanza todos los endpoints acordados y no expone el backend directamente.
-- El backend valida JWT de CORE y mapea permisos sin depender de la sesión local.
-- El frontend usa login, refresh y logout de CORE con el access token solo en memoria.
-- Se propaga `X-Correlation-Id` y los errores usan `application/problem+json`.
-- Readiness verifica sus dependencias obligatorias.
-- OpenAPI refleja las rutas efectivamente publicadas.
-- Los eventos cumplen los schemas y la topología de CORE.
-- La sincronización con Backoffice usa contratos y credenciales aprobados.
+## Siguiente paso
+
+1. Consumir `academic.teacher-events.v1` con el mismo esquema de inbox.
+2. Publicar `academic.exam-scheduled.v1` y `academic.term-defined.v1`.
+3. Migrar el frontend al login de CORE y al gateway.
+
+Los tres dependen de datos que todavía tiene que pasar CORE.
+
+
+## Pendiente de CORE
+
+- Endpoint y formato para obtener el token de servicio de `academic-service` (client credentials).
+- Datos de conexión a RabbitMQ (URL, vhost y credenciales) y formato del envelope de eventos.
+- Mecanismo para publicar `academic.*` (endpoint HTTP o exchange) y campos obligatorios.
+- Secreto de `X-Core-Signature` (por privado) y tolerancia de `X-Core-Timestamp`.
+- Nombre exacto del claim de permisos y confirmación de que `alumnoId` y `docenteId` son el `sub` de CORE.
+
+## Cómo pedir endpoints de otros módulos
+
+Primero se pide el contrato al equipo dueño del dato y después se coordina con CORE el
+acceso por gateway o por token de servicio. El pedido debe incluir: módulo y contacto,
+caso de uso, método y ruta, request y response con ejemplos, errores, filtros y
+paginación, identidad usada (usuario del portal o service account), permisos mínimos,
+ambientes, timeout e idempotencia, y OpenAPI o JSON Schema.

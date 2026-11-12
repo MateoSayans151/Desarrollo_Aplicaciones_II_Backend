@@ -2,6 +2,7 @@ package ar.edu.universidad.gestionacademica.BusinessLogic;
 
 import ar.edu.universidad.gestionacademica.Entidades.*;
 import ar.edu.universidad.gestionacademica.Excepciones.*;
+import ar.edu.universidad.gestionacademica.Integracion.Backoffice.PropiedadesBackoffice;
 import ar.edu.universidad.gestionacademica.Repositorios.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,8 +31,10 @@ public class PlanificacionServicio {
     private final CursoRepositorio cursos;
     private final PeriodoAcademicoRepositorio periodos;
     private final TurnoExamenRepositorio turnos;
+    private final PropiedadesBackoffice backoffice;
 
     public SedeRespuestaDto crearSede(CrearSedeDto dto) {
+        validarAltaLocalDeCatalogo();
         String nombre = dto.nombre().trim();
         if (sedes.existsByNombreIgnoreCase(nombre)) {
             throw new ReglaNegocioException("Ya existe una sede con ese nombre");
@@ -44,6 +47,7 @@ public class PlanificacionServicio {
         return sedes.findAll().stream().sorted(Comparator.comparing(Sede::getNombre)).map(this::sede).toList();
     }
     public AulaRespuestaDto crearAula(Long sedeId, CrearAulaDto dto) {
+        validarAltaLocalDeCatalogo();
         Sede sede = sedes.findById(sedeId).orElseThrow(() -> new RecursoNoEncontradoException("Sede no encontrada"));
         String codigo = dto.codigo().trim();
         if (aulas.existsBySedeIdAndCodigoIgnoreCase(sedeId, codigo)) {
@@ -74,6 +78,7 @@ public class PlanificacionServicio {
         if (aula.getTipo() != TipoUbicacion.AULA) {
             throw new ReglaNegocioException("Solo se pueden asignar ubicaciones de tipo AULA a una asignatura");
         }
+        validarAulaDisponible(aula);
         Asignatura asignatura = asignaturas.findById(dto.asignaturaId()).orElseThrow(() -> new RecursoNoEncontradoException("Asignatura no encontrada"));
         CursoServicio.validarAsignaturaPlanificable(asignatura);
         if (dto.cantidadEstudiantes() > aula.getCapacidadMaxima()) throw new ReglaNegocioException("La cantidad de estudiantes supera la capacidad del aula");
@@ -167,6 +172,28 @@ public class PlanificacionServicio {
     public List<TurnoRespuestaDto> listarTurnos() {
         return turnos.findAll().stream().sorted(Comparator.comparing(TurnoExamen::getFechaInicio).reversed())
                 .map(this::turno).toList();
+    }
+
+    /** Con la integración activa, el catálogo de sedes y espacios lo administra Backoffice. */
+    private void validarAltaLocalDeCatalogo() {
+        if (backoffice != null && backoffice.enabled()) {
+            throw new ReglaNegocioException("Las sedes y aulas se administran en Backoffice; "
+                    + "usá la sincronización para traer los cambios");
+        }
+    }
+
+    /** Un aula o sede inactiva o en mantenimiento en Backoffice no admite reservas ni cursos nuevos. */
+    static void validarAulaDisponible(Aula aula) {
+        if (!estaActiva(aula.getEstado())) {
+            throw new ReglaNegocioException("El aula no está disponible (estado " + aula.getEstado() + ")");
+        }
+        if (aula.getSede() != null && !estaActiva(aula.getSede().getEstado())) {
+            throw new ReglaNegocioException("La sede del aula no está activa (estado " + aula.getSede().getEstado() + ")");
+        }
+    }
+
+    private static boolean estaActiva(String estado) {
+        return estado == null || "ACTIVE".equalsIgnoreCase(estado);
     }
 
     private void validarRango(LocalDate inicio, LocalDate fin, String nombre) {

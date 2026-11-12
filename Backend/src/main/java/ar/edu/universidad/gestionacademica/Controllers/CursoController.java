@@ -1,6 +1,7 @@
 package ar.edu.universidad.gestionacademica.Controllers;
 
 import ar.edu.universidad.gestionacademica.BusinessLogic.CursoServicio;
+import ar.edu.universidad.gestionacademica.Seguridad.AccesoAcademico;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -11,10 +12,11 @@ import java.util.List;
 import static ar.edu.universidad.gestionacademica.Modelos.CursoDto.*;
 
 @RestController
-@RequestMapping("/api/planificacion/cursos")
+@RequestMapping("/api/v1/planificacion/cursos")
 @RequiredArgsConstructor
 public class CursoController {
     private final CursoServicio servicio;
+    private final AccesoAcademico acceso;
 
     @PostMapping @ResponseStatus(HttpStatus.CREATED)
     public CursoRespuestaDto crear(@Valid @RequestBody CrearCursoDto dto) { return servicio.crear(dto); }
@@ -50,6 +52,7 @@ public class CursoController {
     @PostMapping("/{cursoId}/inscripciones") @ResponseStatus(HttpStatus.CREATED)
     public InscripcionCursoRespuestaDto inscribirAlumno(@PathVariable Long cursoId,
                                                         @Valid @RequestBody CrearInscripcionCursoDto dto) {
+        acceso.validarAlumnoPropio(dto.alumnoId());
         return servicio.inscribirAlumno(cursoId, dto);
     }
 

@@ -8,9 +8,10 @@ Las respuestas de cursos incluyen `sedeNombre` y `aulaNombre` además de `sedeId
 y `aulaId`. Los nombres se leen de las tablas `sedes` y `aulas`; no se agregan
 columnas a `cursos`.
 
-La autenticación activa del backend usa usuarios locales y sesión HTTP. La validación
-de JWT emitidos por CORE todavía no está implementada. La API de notas usa el nombre
-de campo compartido `alumnoId` para identificar al alumno en las inscripciones.
+Conviven dos formas de autenticarse: el JWT de CORE (Bearer), que llega por el gateway a
+`/api/v1/**` o directo a `/internal/v1/**`, y la sesión local que usa el frontend propio
+hasta migrar al login de CORE. Permisos y firma del gateway: [`docs/INTEGRACION_CORE.md`](docs/INTEGRACION_CORE.md).
+La API de notas usa el nombre de campo compartido `alumnoId` para identificar al alumno en las inscripciones.
 
 El inventario exhaustivo, las reglas de negocio y las diferencias entre el estado
 actual y el contrato objetivo de CORE están en
@@ -21,16 +22,26 @@ consumir APIs de otros módulos están en
 El recorrido visual está en el
 [`mapa interactivo de arquitectura`](docs/arquitectura-interactiva/index.html).
 
-Variables previstas para esa integración:
+Valores de JWT confirmados por CORE (ya son los valores por defecto). La firma del gateway
+se activa con `CORE_GATEWAY_SIGNATURE_SECRET`:
 
 ```text
-CORE_JWT_JWK_SET_URI=https://core/.well-known/jwks.json
-CORE_JWT_ISSUER=https://core
-CORE_JWT_AUDIENCE=academic-service
+CORE_JWT_JWK_SET_URI=https://core-api-production-e458.up.railway.app/.well-known/jwks.json
+CORE_JWT_ISSUER=https://core-api-production-e458.up.railway.app
+CORE_JWT_AUDIENCE=uadenet
 ```
 
-Los endpoints de este servicio se implementan bajo `/api/planificacion`,
-`/api/academica` y otros controladores del módulo. La ruta externa del gateway
+## Integración con Backoffice
+
+El catálogo de sedes y aulas es de Backoffice. Con `BACKOFFICE_ENABLED=true` el servicio lo
+sincroniza desde `/internal/v1/sites` y `/internal/v1/locations?type=AULA`, bloquea el alta
+local de sedes y aulas, y sólo admite cursos y reservas en aulas `ACTIVE`. La sincronización
+se puede forzar con `POST /api/v1/planificacion/sedes/sincronizar`. Necesita un token de
+servicio en `CORE_SERVICE_TOKEN` o `CORE_SERVICE_TOKEN_URL` + `CORE_SERVICE_CLIENT_SECRET`.
+Detalle completo en [`docs/INTEGRACION_BACKOFFICE.md`](docs/INTEGRACION_BACKOFFICE.md).
+
+Los endpoints de este servicio se implementan bajo `/api/v1/planificacion`,
+`/api/v1/academica` y otros controladores del módulo. La ruta externa del gateway
 se configura por separado. Las comprobaciones de vida están en `GET /health/live`
 y `GET /health/ready`; readiness comprueba la conexión con PostgreSQL.
 
@@ -53,7 +64,7 @@ del año actual y de años anteriores junto con el borrador de un plan futuro. U
 activo no vuelve a planificado ni se elimina. Sólo las asignaturas de planes activos
 de carreras no inactivas admiten cursos y reservas de aula.
 
-Al crear un aula con `POST /api/planificacion/sedes/{id}/aulas`, se puede enviar
+Al crear un aula con `POST /api/v1/planificacion/sedes/{id}/aulas`, se puede enviar
 `nombre` además de `codigo` y `capacidadMaxima` (entre 1 y 100). Si se omite, se utiliza su código.
 Las sedes ya tienen nombre. La base existente no necesita migración para exponerlos
 en las respuestas de cursos.
@@ -104,7 +115,7 @@ obligatoria sobre períodos existentes sin asignarles un valor.
 `DDL_AUTO=update` no modifica restricciones existentes. Una base creada antes de los
 estados `PLANIFICADO`/`ACTIVO` necesita `docker/migrations/07-plan-estados-y-correlatividad-unica.sql`;
 sin ella, crear un plan falla por el check de `planes_estudio`. Con las tablas
-académicas vacías, `docker/seed-registros-prueba-supabase.sql` carga datos de
+académicas vacías, `docker/init/02-datos-prueba.sql` carga datos de
 demostración coherentes con las reglas de negocio, incluidos planes 2025 y 2026 activos
 y un plan 2027 planificado. Sus fechas fijas fueron pensadas para fines de 2026.
 
@@ -117,7 +128,8 @@ docker compose up -d
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
-Este perfil usa las variables `LOCAL_DB_*` de `.env`.
+Este perfil usa las variables `LOCAL_DB_*` de `.env`. El contenedor crea las tablas y carga
+los datos de prueba automáticamente la primera vez que se levanta (ver `docker/README.md`).
 
 La API queda disponible en `http://localhost:8080`. Por defecto utiliza:
 
@@ -131,8 +143,8 @@ Con la aplicación en ejecución, se puede abrir:
 `http://localhost:8080/swagger-ui.html`
 
 Se puede iniciar sesión mediante `POST /api/auth/login`. La sesión queda asociada a la
-cookie `JSESSIONID`; HTTP Basic y la validación del Bearer JWT anunciado en OpenAPI no
-están activos todavía.
+cookie `JSESSIONID`. También se puede usar **Authorize** con un JWT de CORE; HTTP Basic no
+está activo.
 La especificación OpenAPI en formato JSON está disponible en `http://localhost:8080/v3/api-docs`.
 
 Estas credenciales son únicamente para desarrollo. En un entorno real se deben definir
@@ -143,44 +155,47 @@ reemplazar la autenticación local por OAuth2/SSO de la universidad.
 
 | Método | Ruta | Operación |
 |---|---|---|
-| POST / GET | `/api/academica/carreras` | Crear/listar carreras |
-| GET | `/api/academica/carreras/con-ultimo-plan-activo` | Listar carreras con su plan activo de vigencia más reciente |
-| PUT / DELETE | `/api/academica/carreras/{id}` | Editar/desactivar carrera |
-| POST / GET | `/api/academica/carreras/{id}/planes` | Crear/listar planes |
-| PUT / DELETE | `/api/academica/planes/{id}` | Editar o activar un plan/eliminar un plan planificado sin cursos ni reservas |
-| POST / GET | `/api/academica/planes/{id}/asignaturas` | Crear/listar asignaturas |
-| POST / GET | `/api/academica/asignaturas/{id}/correlatividades` | Crear correlativas y consultar condiciones agrupadas por tipo; cada materia incluye ID, código y nombre |
-| POST / GET | `/api/planificacion/sedes` | Crear/listar sedes |
-| POST / GET | `/api/planificacion/sedes/{id}/aulas` | Crear/listar aulas; nombre opcional al crear |
-| POST / GET | `/api/planificacion/asignaciones` | Crear/listar asignaciones de aulas |
-| GET | `/api/planificacion/aulas/{id}/agenda?fecha=AAAA-MM-DD` | Consultar agenda diaria unificada de un aula (cursos y asignaciones puntuales) |
-| GET | `/api/planificacion/aulas/{id}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar cursos y asignaciones puntuales de un aula dentro de un rango inclusivo |
-| GET | `/api/planificacion/asignaturas/{id}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar horarios ocupados por una asignatura en el rango indicado |
-| POST / GET | `/api/planificacion/periodos` | Crear/listar cuatrimestres |
-| POST / GET | `/api/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Al crear requiere horario, aula, `asistenciaMinima` y `promedioMinimo`. |
-| GET | `/api/planificacion/cursos/{id}` | Consultar curso, docentes e inscripciones |
-| GET | `/api/planificacion/cursos/{id}/docentes` | Listar docentes asignados al curso |
-| GET | `/api/planificacion/cursos/{id}/alumnos` | Listar alumnos inscriptos y sus resultados |
-| PUT | `/api/planificacion/cursos/{id}/estado` | Actualizar estado del curso |
-| POST | `/api/planificacion/cursos/{id}/docentes` | Asignar docente externo al curso |
-| POST | `/api/planificacion/cursos/{id}/inscripciones` | Inscribir alumno |
-| PUT | `/api/planificacion/cursos/{id}/inscripciones/{alumnoId}` | Actualizar estado o resultado de la inscripción |
-| GET | `/api/planificacion/alumnos/{alumnoId}/inscripciones?periodoId={id}` | Listar inscripciones de un alumno; el período es opcional |
-| GET | `/api/planificacion/cursos/{id}/notas` | Listar notas finales de alumnos inscriptos |
-| GET / PUT | `/api/planificacion/cursos/{id}/notas/{alumnoId}` | Consultar o cargar la nota final de un alumno |
-| PUT | `/api/planificacion/cursos/{id}/horario` | Actualizar día, aula y horas del curso |
-| POST / GET | `/api/planificacion/turnos-examen` | Crear/listar turnos |
-| GET | `/api/regularidad/cursos/{cursoId}` | Consultar los mínimos de regularidad del curso, sin datos de alumno |
-| PUT | `/api/regularidad/cursos/{cursoId}` | Crear o actualizar los mínimos de regularidad del curso |
+| POST / GET | `/api/v1/academica/carreras` | Crear/listar carreras |
+| GET | `/api/v1/academica/carreras/con-ultimo-plan-activo` | Listar carreras con su plan activo de vigencia más reciente |
+| PUT / DELETE | `/api/v1/academica/carreras/{id}` | Editar/desactivar carrera |
+| POST / GET | `/api/v1/academica/carreras/{id}/planes` | Crear/listar planes |
+| PUT / DELETE | `/api/v1/academica/planes/{id}` | Editar o activar un plan/eliminar un plan planificado sin cursos ni reservas |
+| POST / GET | `/api/v1/academica/planes/{id}/asignaturas` | Crear/listar asignaturas |
+| POST / GET | `/api/v1/academica/asignaturas/{id}/correlatividades` | Crear correlativas y consultar condiciones agrupadas por tipo; cada materia incluye ID, código y nombre |
+| POST / GET | `/api/v1/planificacion/sedes` | Crear/listar sedes |
+| POST / GET | `/api/v1/planificacion/sedes/{id}/aulas` | Crear/listar aulas; nombre opcional al crear |
+| POST | `/api/v1/planificacion/sedes/sincronizar` | Leer el catálogo de Backoffice (requiere `BACKOFFICE_ENABLED=true`) |
+| POST / GET | `/api/v1/planificacion/asignaciones` | Crear/listar asignaciones de aulas |
+| GET | `/api/v1/planificacion/aulas/{id}/agenda?fecha=AAAA-MM-DD` | Consultar agenda diaria unificada de un aula (cursos y asignaciones puntuales) |
+| GET | `/api/v1/planificacion/aulas/{id}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar cursos y asignaciones puntuales de un aula dentro de un rango inclusivo |
+| GET | `/api/v1/planificacion/asignaturas/{id}/agenda?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` | Consultar horarios ocupados por una asignatura en el rango indicado |
+| POST / GET | `/api/v1/planificacion/periodos` | Crear/listar cuatrimestres |
+| POST / GET | `/api/v1/planificacion/cursos` | Crear/listar cursos; admite `?periodoId=`. Al crear requiere horario, aula, `asistenciaMinima` y `promedioMinimo`. |
+| GET | `/api/v1/planificacion/cursos/{id}` | Consultar curso, docentes e inscripciones |
+| GET | `/api/v1/planificacion/cursos/{id}/docentes` | Listar docentes asignados al curso |
+| GET | `/api/v1/planificacion/cursos/{id}/alumnos` | Listar alumnos inscriptos y sus resultados |
+| PUT | `/api/v1/planificacion/cursos/{id}/estado` | Actualizar estado del curso |
+| POST | `/api/v1/planificacion/cursos/{id}/docentes` | Asignar docente externo al curso |
+| POST | `/api/v1/planificacion/cursos/{id}/inscripciones` | Inscribir alumno |
+| PUT | `/api/v1/planificacion/cursos/{id}/inscripciones/{alumnoId}` | Actualizar estado o resultado de la inscripción |
+| GET | `/api/v1/planificacion/alumnos/{alumnoId}/inscripciones?periodoId={id}` | Listar inscripciones de un alumno; el período es opcional |
+| GET | `/api/v1/planificacion/cursos/{id}/notas` | Listar notas finales de alumnos inscriptos |
+| GET / PUT | `/api/v1/planificacion/cursos/{id}/notas/{alumnoId}` | Consultar o cargar la nota final de un alumno |
+| PUT | `/api/v1/planificacion/cursos/{id}/horario` | Actualizar día, aula y horas del curso |
+| POST / GET | `/api/v1/planificacion/turnos-examen` | Crear/listar turnos |
+| GET | `/api/v1/regularidad/cursos/{cursoId}` | Consultar los mínimos de regularidad del curso, sin datos de alumno |
+| PUT | `/api/v1/regularidad/cursos/{cursoId}` | Crear o actualizar los mínimos de regularidad del curso |
 | POST | `/api/auth/login` | Iniciar sesión local |
 | POST | `/api/auth/logout` | Cerrar sesión local |
 | GET | `/api/auth/me` | Consultar usuario autenticado |
 
-Salvo health, Swagger y login, todas las rutas requieren una sesión local válida.
-Las operaciones bajo `/api/academica/**`, `/api/planificacion/**` y el resto de la API
-administrativa aceptan `ROLE_ADMINISTRATIVO` o `ROLE_ACADEMIC_ADMIN`. Un usuario con
-permiso `USUARIO` recibe HTTP 403 en ellas, aunque puede consultar `/api/auth/me` y
-cerrar su sesión.
+Salvo health, Swagger y login, todas las rutas requieren una sesión local o un JWT de CORE.
+La administración (`ADMINISTRATIVO` local, `ACADEMIC_ADMIN` o `academic:manage`) accede a
+todo `/api/v1/**`. Con JWT de CORE, `STUDENT` y `TEACHER` leen los catálogos y sólo acceden
+a sus propios datos: el alumno a sus inscripciones y notas, el docente a los cursos que dicta.
+`/internal/v1/**` sólo admite tokens de servicio. Un usuario local con permiso `USUARIO`
+recibe HTTP 403, aunque puede consultar `/api/auth/me` y cerrar su sesión. La tabla completa
+está en [`docs/INTEGRACION_CORE.md`](docs/INTEGRACION_CORE.md).
 
 ### Ejemplo de login
 
@@ -193,7 +208,7 @@ cerrar su sesión.
 
 ### Ejemplo de condiciones de regularidad
 
-`GET /api/regularidad/cursos/42` devuelve:
+`GET /api/v1/regularidad/cursos/42` devuelve:
 
 ```json
 {
@@ -207,7 +222,7 @@ cerrar su sesión.
 
 La consulta no recibe `alumnoId`, asistencia obtenida ni promedio obtenido. Las
 correlativas se consultan con
-`GET /api/academica/asignaturas/{asignaturaId}/correlatividades`. La migración
+`GET /api/v1/academica/asignaturas/{asignaturaId}/correlatividades`. La migración
 `docker/migrations/06-regularidad-por-curso.sql` crea la tabla y completa con 75% y
 6.0 los cursos que todavía no tienen configuración.
 

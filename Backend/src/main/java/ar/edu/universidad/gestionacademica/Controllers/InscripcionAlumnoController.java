@@ -13,7 +13,7 @@ import java.util.List;
 import static ar.edu.universidad.gestionacademica.Modelos.CursoDto.InscripcionAlumnoRespuestaDto;
 
 @RestController
-@RequestMapping("/api/planificacion/alumnos")
+@RequestMapping("/api/v1/planificacion/alumnos")
 @RequiredArgsConstructor
 public class InscripcionAlumnoController {
     private final CursoServicio servicio;

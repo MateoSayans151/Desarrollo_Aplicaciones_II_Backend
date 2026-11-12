@@ -1,6 +1,7 @@
 package ar.edu.universidad.gestionacademica.Configuracion;
 
 import ar.edu.universidad.gestionacademica.Excepciones.CredencialesInvalidasException;
+import ar.edu.universidad.gestionacademica.Excepciones.IntegracionExternaException;
 import ar.edu.universidad.gestionacademica.Excepciones.RecursoNoEncontradoException;
 import ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,6 +18,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import ar.edu.universidad.gestionacademica.Seguridad.CorrelationId;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -52,6 +55,14 @@ public class ManejadorErrores extends ResponseEntityExceptionHandler {
                 ex.getMessage(), request, null);
     }
 
+    @ExceptionHandler(IntegracionExternaException.class)
+    public ResponseEntity<Object> manejarIntegracion(IntegracionExternaException ex,
+                                                     HttpServletRequest request) {
+        log.warn("Falla de integración en {}: {}", request.getRequestURI(), ex.getMessage());
+        return respuesta(HttpStatus.BAD_GATEWAY, "Error de integración", "UPSTREAM_ERROR",
+                ex.getMessage(), request, null);
+    }
+
     @ExceptionHandler(CredencialesInvalidasException.class)
     public ResponseEntity<Object> manejarCredenciales(CredencialesInvalidasException ex,
                                                       HttpServletRequest request) {
@@ -64,6 +75,11 @@ public class ManejadorErrores extends ResponseEntityExceptionHandler {
                                                        HttpServletRequest request) {
         return respuesta(HttpStatus.UNAUTHORIZED, "No autenticado", "UNAUTHORIZED",
                 "Iniciá sesión para continuar", request, null);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Object> manejarAccesoDenegado(AccessDeniedException ex, HttpServletRequest request) {
+        return respuesta(HttpStatus.FORBIDDEN, "Sin permiso", "FORBIDDEN", ex.getMessage(), request, null);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -158,7 +174,6 @@ public class ManejadorErrores extends ResponseEntityExceptionHandler {
     }
 
     private String correlationId(HttpServletRequest request) {
-        String recibido = request.getHeader("X-Correlation-Id");
-        return recibido == null || recibido.isBlank() ? UUID.randomUUID().toString() : recibido;
+        return CorrelationId.de(request);
     }
 }

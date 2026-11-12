@@ -18,7 +18,14 @@ Supabase) y arrancá explícitamente con el perfil `local`:
 ./mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
-El SQL de `init/01-schema-and-data.sql` se ejecuta al crear el volumen por primera vez.
+Al crear el volumen por primera vez, PostgreSQL ejecuta en orden los scripts de `init/`:
+
+1. `01-schema-and-data.sql` crea las tablas y el usuario administrador.
+2. `02-datos-prueba.sql` carga los datos de prueba: carreras, planes 2025 y 2026 activos y
+   un plan 2027 planificado, asignaturas, correlatividades, sedes, aulas, períodos, turnos,
+   cursos, inscripciones y reservas.
+
+No hace falta aplicar migraciones: el esquema inicial ya es el vigente.
 Para reinicializar los datos de desarrollo se debe bajar el compose con su volumen y
 volver a levantarlo:
 
@@ -58,8 +65,8 @@ Reemplaza el check de `planes_estudio.estado` por `PLANIFICADO`/`ACTIVO`, convie
 valores anteriores y deja una única correlatividad por par de asignaturas, conservando
 la más exigente. Es idempotente y también debe aplicarse en Supabase.
 
-`seed-registros-prueba-supabase.sql` carga datos de demostración sobre tablas académicas
-vacías y no modifica `usuarios`. Usa fechas fijas de 2025 a 2027.
+`init/02-datos-prueba.sql` también puede ejecutarse a mano en Supabase, sobre tablas académicas
+vacías y después de la migración 07. No modifica `usuarios` y usa fechas fijas de 2025 a 2027.
 
 ### Cambios de esquema
 
