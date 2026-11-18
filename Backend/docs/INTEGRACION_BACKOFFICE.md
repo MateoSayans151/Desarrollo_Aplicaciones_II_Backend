@@ -42,10 +42,11 @@ Base: `https://backend-production-e464.up.railway.app`
    única transacción. Si Backoffice falla a mitad de camino no queda un catálogo parcial.
 3. **Eventos.** Con `BACKOFFICE_EVENTS_ENABLED=true` se consume `academic.locations.v1`
    con ack manual. El `eventId` se registra en `eventos_recibidos` en la misma transacción
-   que el cambio, así que un evento repetido no se aplica dos veces. Un mensaje inválido
-   va a dead letter sin reencolarse. El código no declara colas ni bindings.
-4. **Ubicaciones nuevas por evento.** El evento no informa el tipo de espacio, así que si
-   llega un `locationId` desconocido se relee el catálogo para saber si es un aula.
+   que el cambio, así que un evento repetido no se aplica dos veces. Un mensaje que falla se
+   guarda con su error en `eventos_recibidos` y se confirma igual (CORE no reintenta ante un
+   nack). El código no declara colas ni bindings.
+4. **Ubicaciones nuevas por evento.** Si llega un `locationId` desconocido con `type` `AULA`
+   (o sin `type`), se relee el catálogo para traerla completa; otro tipo de espacio se ignora.
 
 ## Correspondencia con el modelo local
 
@@ -87,13 +88,10 @@ Se conservan las claves `Long` locales porque las usan cursos y reservas.
 | `BACKOFFICE_EVENTS_ENABLED` | `false` | Consume `backoffice.location.upserted.v1`. |
 | `BACKOFFICE_EVENTS_QUEUE` | `academic.locations.v1` | Cola creada por CORE. |
 | `CORE_SERVICE_TOKEN` | vacío | Token fijo; tiene prioridad. Útil con el CORE simulado. |
-| `CORE_SERVICE_TOKEN_URL` | vacío | Endpoint de CORE para client credentials. Pendiente de CORE. |
+| `CORE_SERVICE_TOKEN_URL` | `https://core-api-production-e458.up.railway.app/internal/v1/service-auth/token` | Endpoint de CORE (JSON `clientId`/`clientSecret`). |
 | `CORE_SERVICE_CLIENT_ID` | `academic-service` | Service account. |
-| `CORE_SERVICE_CLIENT_SECRET` | vacío | Sólo en Railway, nunca en Git. |
-
-Los eventos usan la conexión RabbitMQ de Spring (`SPRING_RABBITMQ_ADDRESSES` o
-`RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`), que debe
-entregar CORE.
+| `CORE_SERVICE_CLIENT_SECRET` | vacío | Sólo en Railway y en el `.env` local, nunca en Git. |
+| `RABBITMQ_URL` | vacío | `amqp://academic:<contraseña>@<host>:<puerto>/uadenet`, entregada por CORE. |
 
 ## Base de datos
 

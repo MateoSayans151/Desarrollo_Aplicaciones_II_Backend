@@ -6,14 +6,20 @@ import ar.edu.universidad.gestionacademica.Entidades.Asignatura;
 import ar.edu.universidad.gestionacademica.Entidades.Curso;
 import ar.edu.universidad.gestionacademica.Entidades.EstadoCurso;
 import ar.edu.universidad.gestionacademica.Entidades.Sede;
+import ar.edu.universidad.gestionacademica.Entidades.TipoAsignacion;
+import ar.edu.universidad.gestionacademica.Entidades.TurnoExamen;
 import ar.edu.universidad.gestionacademica.Excepciones.ReglaNegocioException;
 import ar.edu.universidad.gestionacademica.Integracion.Backoffice.PropiedadesBackoffice;
+import ar.edu.universidad.gestionacademica.Integracion.Core.PublicadorEventosCore;
 import ar.edu.universidad.gestionacademica.Modelos.PlanificacionDto;
 import ar.edu.universidad.gestionacademica.Repositorios.*;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.List;
+import java.util.UUID;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.DayOfWeek;
@@ -21,6 +27,7 @@ import java.time.DayOfWeek;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class PlanificacionServicioTest {
@@ -32,7 +39,7 @@ class PlanificacionServicioTest {
     private final PlanificacionServicio servicio = new PlanificacionServicio(sedes, aulas,
             asignaturas, asignaciones, cursos,
             mock(PeriodoAcademicoRepositorio.class), mock(TurnoExamenRepositorio.class),
-            new PropiedadesBackoffice(false, null, null, null, 0, null));
+            new PropiedadesBackoffice(false, null, null, null, 0, null), mock(PublicadorEventosCore.class));
 
     @Test
     void guardaYDevuelveElNombreDelAula() {
@@ -181,10 +188,99 @@ class PlanificacionServicioTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void unExamenSePublicaEnCoreConLosIdsDeBackoffice() {
+        var eventos = mock(PublicadorEventosCore.class);
+        var turnos = mock(TurnoExamenRepositorio.class);
+        var conEventos = new PlanificacionServicio(sedes, aulas, asignaturas, asignaciones, cursos,
+                mock(PeriodoAcademicoRepositorio.class), turnos,
+                new PropiedadesBackoffice(false, null, null, null, 0, null), eventos);
+        when(eventos.habilitado()).thenReturn(true);
+        var fecha = LocalDate.of(2099, 12, 5);
+        UUID site = UUID.fromString("3e9b0a12-55cc-4d77-9a01-6b2f8c4e1d90");
+        UUID location = UUID.fromString("c41a77b2-0000-0000-0000-000000000305");
+        when(aulas.findById(4L)).thenReturn(Optional.of(aulaDeBackoffice(site, location)));
+        when(asignaturas.findById(8L)).thenReturn(Optional.of(asignaturaPlanificable()));
+        when(turnos.findFirstByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(fecha, fecha))
+                .thenReturn(Optional.of(TurnoExamen.builder().id(3L).nombre("Diciembre 2099").build()));
+        when(asignaciones.save(any(AsignacionAula.class))).thenAnswer(inv -> {
+            AsignacionAula guardada = inv.getArgument(0);
+            guardada.setId(21L);
+            return guardada;
+        });
+
+        var respuesta = conEventos.asignarAula(new PlanificacionDto.CrearAsignacionDto(4L, 8L, fecha,
+                LocalTime.of(9, 0), LocalTime.of(12, 0), 30, TipoAsignacion.EXAMEN));
+
+        assertThat(respuesta.tipo()).isEqualTo(TipoAsignacion.EXAMEN);
+        ArgumentCaptor<Map<String, Object>> data = ArgumentCaptor.forClass(Map.class);
+        verify(eventos).registrar(eq(PublicadorEventosCore.EXAMEN_PROGRAMADO), eq("exam/21"), data.capture());
+        assertThat(data.getValue())
+                .containsEntry("examId", "21")
+                .containsEntry("subjectId", "8")
+                .containsEntry("startAt", "2099-12-05T09:00:00-03:00")
+                .containsEntry("endAt", "2099-12-05T12:00:00-03:00")
+                .containsEntry("siteId", site.toString())
+                .containsEntry("locationId", location.toString())
+                .containsEntry("examTermId", "3");
+    }
+
+    @Test
+    void unaClaseNoSePublicaComoExamen() {
+        var eventos = mock(PublicadorEventosCore.class);
+        var conEventos = new PlanificacionServicio(sedes, aulas, asignaturas, asignaciones, cursos,
+                mock(PeriodoAcademicoRepositorio.class), mock(TurnoExamenRepositorio.class),
+                new PropiedadesBackoffice(false, null, null, null, 0, null), eventos);
+        when(eventos.habilitado()).thenReturn(true);
+        when(aulas.findById(4L)).thenReturn(Optional.of(aulaDeBackoffice(UUID.randomUUID(), UUID.randomUUID())));
+        when(asignaturas.findById(8L)).thenReturn(Optional.of(asignaturaPlanificable()));
+        when(asignaciones.save(any(AsignacionAula.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var respuesta = conEventos.asignarAula(new PlanificacionDto.CrearAsignacionDto(4L, 8L,
+                LocalDate.now().plusDays(1), LocalTime.of(9, 0), LocalTime.of(12, 0), 30));
+
+        assertThat(respuesta.tipo()).isEqualTo(TipoAsignacion.CLASE);
+        verify(eventos, never()).registrar(any(), any(), any());
+    }
+
+    @Test
+    void unExamenEnUnAulaLocalSeRechazaSiSePublicaEnCore() {
+        var eventos = mock(PublicadorEventosCore.class);
+        var conEventos = new PlanificacionServicio(sedes, aulas, asignaturas, asignaciones, cursos,
+                mock(PeriodoAcademicoRepositorio.class), mock(TurnoExamenRepositorio.class),
+                new PropiedadesBackoffice(false, null, null, null, 0, null), eventos);
+        when(eventos.habilitado()).thenReturn(true);
+        when(aulas.findById(4L)).thenReturn(Optional.of(Aula.builder().id(4L)
+                .tipo(ar.edu.universidad.gestionacademica.Entidades.TipoUbicacion.AULA).capacidadMaxima(40)
+                .sede(Sede.builder().id(2L).build()).build()));
+        when(asignaturas.findById(8L)).thenReturn(Optional.of(asignaturaPlanificable()));
+
+        assertThatThrownBy(() -> conEventos.asignarAula(new PlanificacionDto.CrearAsignacionDto(4L, 8L,
+                LocalDate.now().plusDays(1), LocalTime.of(9, 0), LocalTime.of(12, 0), 30, TipoAsignacion.EXAMEN)))
+                .isInstanceOf(ReglaNegocioException.class)
+                .hasMessageContaining("Backoffice");
+        verify(asignaciones, never()).save(any());
+    }
+
+    private static Aula aulaDeBackoffice(UUID site, UUID location) {
+        return Aula.builder().id(4L).nombre("Aula 305").backofficeLocationId(location)
+                .tipo(ar.edu.universidad.gestionacademica.Entidades.TipoUbicacion.AULA).capacidadMaxima(40)
+                .sede(Sede.builder().id(2L).backofficeSiteId(site).build()).build();
+    }
+
+    private static Asignatura asignaturaPlanificable() {
+        return Asignatura.builder().id(8L).codigo("PROG1").nombre("Programación I")
+                .plan(ar.edu.universidad.gestionacademica.Entidades.PlanEstudio.builder()
+                        .estado(ar.edu.universidad.gestionacademica.Entidades.EstadoPlanEstudio.ACTIVO)
+                        .carrera(ar.edu.universidad.gestionacademica.Entidades.Carrera.builder().build()).build())
+                .build();
+    }
+
+    @Test
     void conBackofficeActivoNoSeCreanSedesNiAulasLocales() {
         var integrado = new PlanificacionServicio(sedes, aulas, asignaturas, asignaciones, cursos,
                 mock(PeriodoAcademicoRepositorio.class), mock(TurnoExamenRepositorio.class),
-                new PropiedadesBackoffice(true, "https://bo", null, null, 100, null));
+                new PropiedadesBackoffice(true, "https://bo", null, null, 100, null), mock(PublicadorEventosCore.class));
 
         assertThatThrownBy(() -> integrado.crearSede(new PlanificacionDto.CrearSedeDto("Sede", "Av. 1")))
                 .isInstanceOf(ReglaNegocioException.class)

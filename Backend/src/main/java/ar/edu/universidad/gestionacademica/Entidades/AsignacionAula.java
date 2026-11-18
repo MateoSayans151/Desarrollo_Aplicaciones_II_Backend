@@ -26,4 +26,7 @@ public class AsignacionAula {
     private LocalTime horaFin;
     @Positive @Column(nullable = false)
     private int cantidadEstudiantes;
+    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20, columnDefinition = "varchar(20) default 'CLASE'")
+    @Builder.Default
+    private TipoAsignacion tipo = TipoAsignacion.CLASE;
 }

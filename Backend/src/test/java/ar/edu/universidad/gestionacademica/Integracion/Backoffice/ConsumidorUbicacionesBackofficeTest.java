@@ -1,6 +1,7 @@
 package ar.edu.universidad.gestionacademica.Integracion.Backoffice;
 
 import ar.edu.universidad.gestionacademica.Entidades.EventoRecibido;
+import ar.edu.universidad.gestionacademica.Integracion.Core.BandejaEventosCore;
 import ar.edu.universidad.gestionacademica.Repositorios.EventoRecibidoRepositorio;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
@@ -13,6 +14,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static ar.edu.universidad.gestionacademica.Integracion.Backoffice.BackofficeDto.UbicacionActualizada;
 import static ar.edu.universidad.gestionacademica.Integracion.Backoffice.ConsumidorUbicacionesBackoffice.Resultado;
@@ -31,22 +33,33 @@ class ConsumidorUbicacionesBackofficeTest {
     private ConsumidorUbicacionesBackoffice consumidor;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void preparar() {
-        consumidor = new ConsumidorUbicacionesBackoffice(catalogo, inbox, transaccion, new ObjectMapper());
+        consumidor = new ConsumidorUbicacionesBackoffice(catalogo,
+                new BandejaEventosCore(inbox, transaccion, new ObjectMapper()));
         when(transaccion.execute(any())).thenAnswer(inv -> ((TransactionCallback<?>) inv.getArgument(0)).doInTransaction(null));
+        doAnswer(inv -> {
+            ((Consumer<Object>) inv.getArgument(0)).accept(null);
+            return null;
+        }).when(transaccion).executeWithoutResult(any());
     }
 
     @Test
-    void aplicaElPayloadDelEnvelopeYRegistraElEventId() throws Exception {
+    void aplicaElEnvelopeDeCoreYRegistraElEventId() throws Exception {
         when(catalogo.aplicarUbicacion(any())).thenReturn(true);
 
         consumidor.recibir(mensaje("""
-                {"eventId":"evt-1","type":"backoffice.location.upserted.v1",
-                 "data":{"locationId":"%s","siteId":"%s","name":"Aula 305","capacity":60,"status":"ACTIVE"}}
+                {"specVersion":"1.0","eventId":"6f1c2b9e-4d3a-4e8b-9a71-2c5d8e0f1a23",
+                 "eventType":"backoffice.location.upserted.v1","source":"backoffice",
+                 "occurredAt":"2026-11-17T14:05:00.000Z","subject":"location/%1$s",
+                 "correlationId":"0b7e3c1d-8f2a-4b6c-9d5e-1a2b3c4d5e6f","causationId":null,
+                 "actor":{"type":"service","id":"backoffice-service"},
+                 "data":{"locationId":"%1$s","siteId":"%2$s","name":"Aula 305","capacity":60,"status":"ACTIVE","type":"AULA"}}
                 """.formatted(LOCATION, SITE)), canal);
 
-        verify(catalogo).aplicarUbicacion(new UbicacionActualizada(LOCATION, SITE, "Aula 305", 60, "ACTIVE"));
-        verify(inbox).saveAndFlush(argThat((EventoRecibido evento) -> evento.getEventId().equals("evt-1")));
+        verify(catalogo).aplicarUbicacion(new UbicacionActualizada(LOCATION, SITE, "Aula 305", 60, "ACTIVE", "AULA"));
+        verify(inbox).saveAndFlush(argThat((EventoRecibido evento) ->
+                evento.getEventId().equals("6f1c2b9e-4d3a-4e8b-9a71-2c5d8e0f1a23") && evento.getError() == null));
         verify(canal).basicAck(7L, false);
         verify(catalogo, never()).sincronizarSinPropagar();
     }
@@ -56,7 +69,7 @@ class ConsumidorUbicacionesBackofficeTest {
         when(inbox.existsById("evt-1")).thenReturn(true);
 
         consumidor.recibir(mensaje("""
-                {"eventId":"evt-1","type":"backoffice.location.upserted.v1",
+                {"eventId":"evt-1","eventType":"backoffice.location.upserted.v1",
                  "data":{"locationId":"%s","siteId":"%s","name":"Aula 305","capacity":60,"status":"ACTIVE"}}
                 """.formatted(LOCATION, SITE)), canal);
 
@@ -65,11 +78,12 @@ class ConsumidorUbicacionesBackofficeTest {
     }
 
     @Test
-    void anteUnaUbicacionNuevaReleeElCatalogoDespuesDelAck() throws Exception {
+    void anteUnAulaNuevaReleeElCatalogoDespuesDelAck() throws Exception {
         when(catalogo.aplicarUbicacion(any())).thenReturn(false);
 
         consumidor.recibir(mensaje("""
-                {"eventId":"evt-2","locationId":"%s","siteId":"%s","name":"Lab","capacity":20,"status":"ACTIVE"}
+                {"eventId":"evt-2","eventType":"backoffice.location.upserted.v1",
+                 "data":{"locationId":"%s","siteId":"%s","name":"Aula 9","capacity":20,"status":"ACTIVE","type":"AULA"}}
                 """.formatted(LOCATION, SITE)), canal);
 
         var orden = inOrder(canal, catalogo);
@@ -78,16 +92,32 @@ class ConsumidorUbicacionesBackofficeTest {
     }
 
     @Test
-    void unMensajeInvalidoVaADeadLetterSinReencolar() throws Exception {
-        consumidor.recibir(mensaje("{\"type\":\"backoffice.location.upserted.v1\",\"data\":{}}"), canal);
+    void unEspacioNuevoQueNoEsAulaNoDisparaLaSincronizacion() throws Exception {
+        when(catalogo.aplicarUbicacion(any())).thenReturn(false);
 
-        verify(canal).basicNack(7L, false, false);
-        verify(canal, never()).basicAck(anyLong(), anyBoolean());
+        Resultado resultado = consumidor.procesar(mensaje("""
+                {"eventId":"evt-3","eventType":"backoffice.location.upserted.v1",
+                 "data":{"locationId":"%s","siteId":"%s","name":"Lab","capacity":20,"status":"ACTIVE","type":"LABORATORIO"}}
+                """.formatted(LOCATION, SITE)));
+
+        assertThat(resultado).isEqualTo(Resultado.IGNORADO);
+    }
+
+    @Test
+    void unMensajeInvalidoSeGuardaConSuErrorYSeConfirma() throws Exception {
+        consumidor.recibir(mensaje("""
+                {"eventId":"evt-4","eventType":"backoffice.location.upserted.v1","data":{"locationId":"LAB-201"}}
+                """), canal);
+
+        verify(inbox).saveAndFlush(argThat((EventoRecibido evento) ->
+                evento.getEventId().equals("evt-4") && evento.getError() != null && evento.getPayload().contains("LAB-201")));
+        verify(canal).basicAck(7L, false);
+        verify(canal, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
     }
 
     @Test
     void ignoraOtrosTiposDeEvento() throws Exception {
-        Resultado resultado = consumidor.procesar(mensaje("{\"eventId\":\"x\",\"type\":\"backoffice.site.upserted.v1\"}"));
+        Resultado resultado = consumidor.procesar(mensaje("{\"eventId\":\"x\",\"eventType\":\"backoffice.site.upserted.v1\"}"));
 
         assertThat(resultado).isEqualTo(Resultado.IGNORADO);
         verifyNoInteractions(inbox);

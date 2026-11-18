@@ -36,9 +36,10 @@ CORE_JWT_AUDIENCE=uadenet
 El catálogo de sedes y aulas es de Backoffice. Con `BACKOFFICE_ENABLED=true` el servicio lo
 sincroniza desde `/internal/v1/sites` y `/internal/v1/locations?type=AULA`, bloquea el alta
 local de sedes y aulas, y sólo admite cursos y reservas en aulas `ACTIVE`. La sincronización
-se puede forzar con `POST /api/v1/planificacion/sedes/sincronizar`. Necesita un token de
-servicio en `CORE_SERVICE_TOKEN` o `CORE_SERVICE_TOKEN_URL` + `CORE_SERVICE_CLIENT_SECRET`.
-Detalle completo en [`docs/INTEGRACION_BACKOFFICE.md`](docs/INTEGRACION_BACKOFFICE.md).
+se puede forzar con `POST /api/v1/planificacion/sedes/sincronizar`. Necesita el token de
+servicio de CORE: alcanza con `CORE_SERVICE_CLIENT_SECRET` (o un token fijo en `CORE_SERVICE_TOKEN`).
+Detalle completo en [`docs/INTEGRACION_BACKOFFICE.md`](docs/INTEGRACION_BACKOFFICE.md); eventos,
+RabbitMQ y variables de Railway en [`docs/INTEGRACION_CORE.md`](docs/INTEGRACION_CORE.md).
 
 Los endpoints de este servicio se implementan bajo `/api/v1/planificacion`,
 `/api/v1/academica` y otros controladores del módulo. La ruta externa del gateway

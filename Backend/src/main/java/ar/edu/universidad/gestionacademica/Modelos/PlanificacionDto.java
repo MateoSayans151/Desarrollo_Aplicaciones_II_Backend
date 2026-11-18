@@ -1,6 +1,7 @@
 package ar.edu.universidad.gestionacademica.Modelos;
 
 import jakarta.validation.constraints.*;
+import ar.edu.universidad.gestionacademica.Entidades.TipoAsignacion;
 import ar.edu.universidad.gestionacademica.Entidades.TipoUbicacion;
 
 import java.time.LocalDate;
@@ -20,18 +21,27 @@ public final class PlanificacionDto {
     public record AulaRespuestaDto(Long id, String codigo, String nombre, UUID backofficeLocationId, TipoUbicacion tipo,
                                    int capacidadMaxima, Long sedeId, String estado) { }
 
+    /** {@code tipo} es opcional: sin informar se toma CLASE. */
     public record CrearAsignacionDto(@NotNull Long aulaId, @NotNull Long asignaturaId,
                                      @NotNull LocalDate fecha, @NotNull LocalTime horaInicio,
-                                     @NotNull LocalTime horaFin, @Positive int cantidadEstudiantes) { }
+                                     @NotNull LocalTime horaFin, @Positive int cantidadEstudiantes,
+                                     TipoAsignacion tipo) {
+        public CrearAsignacionDto(Long aulaId, Long asignaturaId, LocalDate fecha, LocalTime horaInicio,
+                                  LocalTime horaFin, int cantidadEstudiantes) {
+            this(aulaId, asignaturaId, fecha, horaInicio, horaFin, cantidadEstudiantes, TipoAsignacion.CLASE);
+        }
+    }
     public record AsignacionRespuestaDto(Long id, Long aulaId, Long asignaturaId, LocalDate fecha,
-                                         LocalTime horaInicio, LocalTime horaFin, int cantidadEstudiantes) { }
+                                         LocalTime horaInicio, LocalTime horaFin, int cantidadEstudiantes,
+                                         TipoAsignacion tipo) { }
 
     public enum TipoOcupacionAula { CURSO, ASIGNACION }
+    /** {@code asignacionTipo} sólo viene en las ocupaciones de tipo ASIGNACION (CLASE o EXAMEN). */
     public record OcupacionAulaDto(TipoOcupacionAula tipo, Long referenciaId, Long aulaId,
                                    Long asignaturaId, String asignaturaCodigo,
                                    String asignaturaNombre, String cursoCodigo, LocalDate fecha,
                                    LocalTime horaInicio, LocalTime horaFin,
-                                   Integer cantidadEstudiantes) { }
+                                   Integer cantidadEstudiantes, TipoAsignacion asignacionTipo) { }
 
     public record CrearPeriodoDto(@Min(2000) @Max(2100) int anio, @Min(1) @Max(2) int numero,
                                   @NotNull LocalDate fechaInicio, @NotNull LocalDate fechaFin,

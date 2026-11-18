@@ -87,7 +87,8 @@ No existen controladores `/api/usuarios`, ni endpoints para crear o listar usuar
 
 La agenda del aula devuelve una lista unificada con `tipo` (`CURSO` o `ASIGNACION`),
 `referenciaId`, aula, asignatura, fecha y horario. Para cursos también informa
-`cursoCodigo`; para asignaciones puntuales informa `cantidadEstudiantes`. Cada curso
+`cursoCodigo`; para asignaciones puntuales informa `cantidadEstudiantes` y `asignacionTipo`
+(`CLASE` o `EXAMEN`; en los cursos viene `null`). Cada curso
 se expande en una ocurrencia por semana dentro de sus fechas de inicio y fin.
 
 ### Cursos, docentes, inscripciones y notas
@@ -133,7 +134,7 @@ integración objetivo deberán transportar el UUID de CORE como texto.
 | Crear correlatividad | `{ "correlativaId": 1, "tipo": "REGULAR|APROBADA" }` | `201`; relación creada. |
 | Crear sede | `{ "nombre", "direccion" }` | `201`; sede con `id`, `backofficeSiteId` y `estado`. |
 | Crear aula | `{ "codigo", "capacidadMaxima", "nombre"? }` | `201`; aula tipo `AULA`; capacidad de 1 a 100; si falta `nombre`, usa el código. |
-| Asignar aula | `{ "aulaId", "asignaturaId", "fecha", "horaInicio", "horaFin", "cantidadEstudiantes" }` | `201`; asignación persistida. |
+| Asignar aula | `{ "aulaId", "asignaturaId", "fecha", "horaInicio", "horaFin", "cantidadEstudiantes", "tipo"? }` | `201`; asignación persistida. `tipo` es `CLASE` (por defecto) o `EXAMEN`; un examen se publica en CORE como `academic.exam-scheduled.v1`. |
 | Crear período | `{ "anio", "numero", "fechaInicio", "fechaFin", "inscripcionDesde", "inscripcionHasta" }` | `201`; período creado. `numero` admite 1 o 2. |
 | Crear turno de examen | `{ "nombre", "fechaInicio", "fechaFin", "inscripcionDesde", "inscripcionHasta" }` | `201`; turno creado. |
 | Crear curso | `{ "codigo", "asignaturaId", "periodoId", "sedeId", "modalidad", "cupoMaximo", "fechaInicio", "fechaFin", "turno", "horaInicio", "horaFin", "diaSemana", "aulaId", "asistenciaMinima", "promedioMinimo" }` | `201`; crea el curso y sus condiciones de regularidad en una única transacción. |

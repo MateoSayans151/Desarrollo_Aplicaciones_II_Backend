@@ -133,7 +133,7 @@ class SincronizacionBackofficeServicioTest {
                 .backofficeLocationId(AULA_305).sede(sede).build();
         when(aulas.findByBackofficeLocationId(AULA_305)).thenReturn(Optional.of(aula));
 
-        boolean aplicado = servicio.aplicarUbicacion(new UbicacionActualizada(AULA_305, SITE, "Aula 305 bis", 60, "INACTIVE"));
+        boolean aplicado = servicio.aplicarUbicacion(new UbicacionActualizada(AULA_305, SITE, "Aula 305 bis", 60, "INACTIVE", null));
 
         assertThat(aplicado).isTrue();
         assertThat(aula.getNombre()).isEqualTo("Aula 305 bis");
@@ -143,7 +143,7 @@ class SincronizacionBackofficeServicioTest {
 
     @Test
     void elEventoDeUnaUbicacionDesconocidaNoCreaNada() {
-        assertThat(servicio.aplicarUbicacion(new UbicacionActualizada(AULA_305, SITE, "x", 10, "ACTIVE"))).isFalse();
+        assertThat(servicio.aplicarUbicacion(new UbicacionActualizada(AULA_305, SITE, "x", 10, "ACTIVE", null))).isFalse();
         verify(aulas, never()).save(any());
     }
 

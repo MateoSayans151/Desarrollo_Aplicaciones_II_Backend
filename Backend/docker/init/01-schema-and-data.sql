@@ -82,7 +82,9 @@ CREATE TABLE asignaciones_aula (
     fecha DATE NOT NULL,
     hora_inicio TIME NOT NULL,
     hora_fin TIME NOT NULL,
-    cantidad_estudiantes INTEGER NOT NULL
+    cantidad_estudiantes INTEGER NOT NULL,
+    -- CLASE o EXAMEN; los exámenes se publican en CORE (academic.exam-scheduled.v1).
+    tipo VARCHAR(20) NOT NULL DEFAULT 'CLASE'
 );
 
 CREATE TABLE periodos_academicos (
@@ -153,12 +155,28 @@ CREATE TABLE turnos_examen (
     inscripcion_hasta DATE NOT NULL
 );
 
--- Inbox de eventos consumidos desde CORE: deduplica por eventId.
+-- Inbox de eventos consumidos desde CORE: deduplica por eventId. payload y error guardan
+-- los eventos pendientes de aplicar o fallidos, para reprocesarlos.
 CREATE TABLE eventos_recibidos (
     event_id VARCHAR(100) PRIMARY KEY,
     tipo VARCHAR(150) NOT NULL,
-    recibido_en TIMESTAMP(6) WITH TIME ZONE NOT NULL
+    recibido_en TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    payload TEXT,
+    error VARCHAR(500)
 );
+
+-- Outbox de eventos academic.* que se publican en CORE (POST /internal/v1/events).
+CREATE TABLE eventos_publicados (
+    event_id VARCHAR(36) PRIMARY KEY,
+    tipo VARCHAR(150) NOT NULL,
+    sobre TEXT NOT NULL,
+    estado VARCHAR(20) NOT NULL,
+    creado_en TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    enviado_en TIMESTAMP(6) WITH TIME ZONE,
+    intentos INTEGER NOT NULL,
+    ultimo_error VARCHAR(500)
+);
+CREATE INDEX idx_eventos_publicados_estado ON eventos_publicados (estado, creado_en);
 
 -- Credenciales: admin@universidad.edu.ar / CambiarEstaClave123!
 -- pgcrypto genera un hash BCrypt; el backend lo valida con BCryptPasswordEncoder.

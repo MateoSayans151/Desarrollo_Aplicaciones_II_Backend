@@ -118,10 +118,15 @@ class SeguridadCoreTest {
     void lasRutasInternasSoloAceptanTokensDeServicio() throws Exception {
         when(estructura.listarCarreras()).thenReturn(List.of());
 
+        mvc.perform(get("/internal/v1/carreras").with(usuario("svc", Map.of("service", "backoffice"))))
+                .andExpect(status().isOk());
+        mvc.perform(get("/internal/v1/carreras/3/planes").with(usuario("svc", Map.of("service", "backoffice"))))
+                .andExpect(status().isOk());
+        // Sólo Backoffice: otro servicio (o el clientId en lugar del claim service) queda afuera.
         mvc.perform(get("/internal/v1/carreras").with(usuario("svc", Map.of("service", "backoffice-service"))))
-                .andExpect(status().isOk());
-        mvc.perform(get("/internal/v1/carreras/3/planes").with(usuario("svc", Map.of("service", "backoffice-service"))))
-                .andExpect(status().isOk());
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/internal/v1/carreras").with(usuario("svc", Map.of("service", "teacher"))))
+                .andExpect(status().isForbidden());
         mvc.perform(get("/internal/v1/carreras").with(alumno())).andExpect(status().isForbidden());
         mvc.perform(get("/internal/v1/carreras")).andExpect(status().isUnauthorized());
     }

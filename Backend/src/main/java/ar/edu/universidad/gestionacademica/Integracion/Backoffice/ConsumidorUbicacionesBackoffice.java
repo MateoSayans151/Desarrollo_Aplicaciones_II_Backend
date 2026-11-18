@@ -1,9 +1,9 @@
 package ar.edu.universidad.gestionacademica.Integracion.Backoffice;
 
-import ar.edu.universidad.gestionacademica.Entidades.EventoRecibido;
-import ar.edu.universidad.gestionacademica.Repositorios.EventoRecibidoRepositorio;
+import ar.edu.universidad.gestionacademica.Entidades.TipoUbicacion;
+import ar.edu.universidad.gestionacademica.Integracion.Core.BandejaEventosCore;
+import ar.edu.universidad.gestionacademica.Integracion.Core.EventoEntrante;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,18 +12,17 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.UUID;
 
 import static ar.edu.universidad.gestionacademica.Integracion.Backoffice.BackofficeDto.UbicacionActualizada;
+import static ar.edu.universidad.gestionacademica.Integracion.Core.EventoEntrante.texto;
 
 /**
  * Consume backoffice.location.upserted.v1 desde la cola academic.locations.v1 que creó CORE.
- * No declara colas ni bindings. Usa ack manual y descarta eventos repetidos por eventId,
- * registrando el evento y su efecto en la misma transacción.
+ * No declara colas ni bindings (el usuario de RabbitMQ no puede). Usa ack manual, descarta
+ * eventos repetidos por eventId y, si uno falla, lo guarda con su error y hace ack igual.
  */
 @Component
 @ConditionalOnProperty(prefix = "backoffice.events", name = "enabled", havingValue = "true")
@@ -32,89 +31,67 @@ public class ConsumidorUbicacionesBackoffice {
     private static final Logger log = LoggerFactory.getLogger(ConsumidorUbicacionesBackoffice.class);
 
     private final SincronizacionBackofficeServicio catalogo;
-    private final EventoRecibidoRepositorio inbox;
-    private final TransactionTemplate transaccion;
-    private final ObjectMapper json;
+    private final BandejaEventosCore bandeja;
 
-    public ConsumidorUbicacionesBackoffice(SincronizacionBackofficeServicio catalogo, EventoRecibidoRepositorio inbox,
-                                           TransactionTemplate transaccion, ObjectMapper json) {
+    public ConsumidorUbicacionesBackoffice(SincronizacionBackofficeServicio catalogo, BandejaEventosCore bandeja) {
         this.catalogo = catalogo;
-        this.inbox = inbox;
-        this.transaccion = transaccion;
-        this.json = json;
+        this.bandeja = bandeja;
     }
 
     @RabbitListener(queues = "${backoffice.events.queue}", ackMode = "MANUAL")
     public void recibir(Message mensaje, Channel canal) throws IOException {
-        long entrega = mensaje.getMessageProperties().getDeliveryTag();
+        Resultado resultado;
         try {
-            Resultado resultado = procesar(mensaje);
-            canal.basicAck(entrega, false);
-            if (resultado == Resultado.UBICACION_DESCONOCIDA) {
-                // El evento no trae el tipo de espacio: se relee el catálogo para saber si es un aula.
-                catalogo.sincronizarSinPropagar();
-            }
+            resultado = procesar(mensaje);
         } catch (DataIntegrityViolationException duplicado) {
             log.info("Evento de Backoffice ya registrado por otro consumidor; se descarta");
-            canal.basicAck(entrega, false);
+            resultado = Resultado.DUPLICADO;
         } catch (RuntimeException | IOException ex) {
-            log.error("No se pudo procesar un evento de {}; se envía a dead letter", TIPO_EVENTO, ex);
-            canal.basicNack(entrega, false, false);
+            log.error("No se pudo procesar un evento de {}; queda guardado para reprocesarlo", TIPO_EVENTO, ex);
+            bandeja.registrarFallido(mensaje, ex);
+            resultado = Resultado.FALLIDO;
+        }
+        canal.basicAck(mensaje.getMessageProperties().getDeliveryTag(), false);
+        if (resultado == Resultado.UBICACION_DESCONOCIDA) {
+            // Un aula nueva: se relee el catálogo para traerla con todos sus datos (código, etc.).
+            catalogo.sincronizarSinPropagar();
         }
     }
 
     Resultado procesar(Message mensaje) throws IOException {
-        JsonNode raiz = json.readTree(mensaje.getBody());
-        String tipo = primerTexto(raiz, "type", "eventType");
-        if (tipo == null) tipo = mensaje.getMessageProperties().getReceivedRoutingKey();
-        if (tipo != null && !tipo.startsWith("backoffice.location.upserted")) {
-            log.debug("Se ignora un evento {} en la cola de ubicaciones", tipo);
+        EventoEntrante evento = bandeja.leer(mensaje);
+        if (evento.tipo() != null && !evento.tipo().startsWith("backoffice.location.upserted")) {
+            log.debug("Se ignora un evento {} en la cola de ubicaciones", evento.tipo());
             return Resultado.IGNORADO;
         }
-        String eventId = primerTexto(raiz, "eventId", "id");
-        if (eventId == null) eventId = mensaje.getMessageProperties().getMessageId();
-        if (eventId == null || eventId.isBlank()) {
-            throw new IllegalArgumentException("El evento no trae eventId");
-        }
-        UbicacionActualizada ubicacion = ubicacion(datos(raiz));
+        UbicacionActualizada ubicacion = ubicacion(evento.data());
         if (ubicacion.locationId() == null) {
-            throw new IllegalArgumentException("El evento " + eventId + " no trae locationId");
+            throw new IllegalArgumentException("El evento " + evento.eventId() + " no trae locationId");
         }
-        String idEvento = eventId.length() > 100 ? eventId.substring(0, 100) : eventId;
-        String tipoEvento = tipo == null ? TIPO_EVENTO : tipo;
-        return transaccion.execute(estado -> {
-            if (inbox.existsById(idEvento)) return Resultado.DUPLICADO;
-            inbox.saveAndFlush(EventoRecibido.builder().eventId(idEvento).tipo(tipoEvento)
-                    .recibidoEn(Instant.now()).build());
-            return catalogo.aplicarUbicacion(ubicacion) ? Resultado.APLICADO : Resultado.UBICACION_DESCONOCIDA;
-        });
+        return bandeja.procesarUnaVez(evento, null, () -> {
+            if (catalogo.aplicarUbicacion(ubicacion)) return Resultado.APLICADO;
+            // La copia local sólo tiene aulas: otro tipo de espacio que no conocemos no interesa.
+            return esAula(ubicacion) ? Resultado.UBICACION_DESCONOCIDA : Resultado.IGNORADO;
+        }, Resultado.DUPLICADO);
     }
 
-    /** El envelope de CORE puede traer el payload en data o payload; si no, se toma la raíz. */
-    private static JsonNode datos(JsonNode raiz) {
-        if (raiz.hasNonNull("data") && raiz.get("data").isObject()) return raiz.get("data");
-        if (raiz.hasNonNull("payload") && raiz.get("payload").isObject()) return raiz.get("payload");
-        return raiz;
+    private static boolean esAula(UbicacionActualizada ubicacion) {
+        return ubicacion.type() == null || SincronizacionBackofficeServicio.tipo(ubicacion.type()) == TipoUbicacion.AULA;
     }
 
+    /** data: locationId, siteId, name, capacity y status obligatorios; type opcional. */
     private static UbicacionActualizada ubicacion(JsonNode datos) {
         return new UbicacionActualizada(uuid(datos, "locationId"), uuid(datos, "siteId"),
-                primerTexto(datos, "name"),
+                texto(datos, "name"),
                 datos.hasNonNull("capacity") ? datos.get("capacity").asInt() : null,
-                primerTexto(datos, "status"));
+                texto(datos, "status"),
+                texto(datos, "type"));
     }
 
     private static UUID uuid(JsonNode nodo, String campo) {
-        String valor = primerTexto(nodo, campo);
+        String valor = texto(nodo, campo);
         return valor == null ? null : UUID.fromString(valor);
     }
 
-    private static String primerTexto(JsonNode nodo, String... campos) {
-        for (String campo : campos) {
-            if (nodo.hasNonNull(campo) && !nodo.get(campo).asText().isBlank()) return nodo.get(campo).asText();
-        }
-        return null;
-    }
-
-    enum Resultado { APLICADO, UBICACION_DESCONOCIDA, DUPLICADO, IGNORADO }
+    enum Resultado { APLICADO, UBICACION_DESCONOCIDA, DUPLICADO, IGNORADO, FALLIDO }
 }

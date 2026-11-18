@@ -3,6 +3,7 @@ package ar.edu.universidad.gestionacademica.BusinessLogic;
 import ar.edu.universidad.gestionacademica.Entidades.*;
 import ar.edu.universidad.gestionacademica.Excepciones.*;
 import ar.edu.universidad.gestionacademica.Integracion.Backoffice.PropiedadesBackoffice;
+import ar.edu.universidad.gestionacademica.Integracion.Core.PublicadorEventosCore;
 import ar.edu.universidad.gestionacademica.Repositorios.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -10,10 +11,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static ar.edu.universidad.gestionacademica.Modelos.PlanificacionDto.*;
 
@@ -23,6 +29,7 @@ import static ar.edu.universidad.gestionacademica.Modelos.PlanificacionDto.*;
 public class PlanificacionServicio {
     private static final LocalTime HORA_APERTURA = LocalTime.of(7, 0);
     private static final LocalTime HORA_CIERRE = LocalTime.of(23, 0);
+    private static final ZoneId ZONA_UNIVERSIDAD = ZoneId.of("America/Argentina/Buenos_Aires");
 
     private final SedeRepositorio sedes;
     private final AulaRepositorio aulas;
@@ -32,6 +39,7 @@ public class PlanificacionServicio {
     private final PeriodoAcademicoRepositorio periodos;
     private final TurnoExamenRepositorio turnos;
     private final PropiedadesBackoffice backoffice;
+    private final PublicadorEventosCore eventos;
 
     public SedeRespuestaDto crearSede(CrearSedeDto dto) {
         validarAltaLocalDeCatalogo();
@@ -82,6 +90,12 @@ public class PlanificacionServicio {
         Asignatura asignatura = asignaturas.findById(dto.asignaturaId()).orElseThrow(() -> new RecursoNoEncontradoException("Asignatura no encontrada"));
         CursoServicio.validarAsignaturaPlanificable(asignatura);
         if (dto.cantidadEstudiantes() > aula.getCapacidadMaxima()) throw new ReglaNegocioException("La cantidad de estudiantes supera la capacidad del aula");
+        TipoAsignacion tipo = dto.tipo() == null ? TipoAsignacion.CLASE : dto.tipo();
+        if (tipo == TipoAsignacion.EXAMEN && eventos.habilitado()
+                && (aula.getBackofficeLocationId() == null || aula.getSede().getBackofficeSiteId() == null)) {
+            // CORE exige siteId y locationId de Backoffice en academic.exam-scheduled.v1.
+            throw new ReglaNegocioException("Para programar un examen el aula tiene que estar sincronizada con Backoffice");
+        }
         if (asignaciones.existsByAulaIdAndFechaAndHoraInicioLessThanAndHoraFinGreaterThan(dto.aulaId(), dto.fecha(), dto.horaFin(), dto.horaInicio())) {
             throw new ReglaNegocioException("El aula ya esta ocupada en ese horario");
         }
@@ -91,8 +105,41 @@ public class PlanificacionServicio {
         }
         AsignacionAula a = asignaciones.save(AsignacionAula.builder().aula(aula).asignatura(asignatura)
                 .fecha(dto.fecha()).horaInicio(dto.horaInicio()).horaFin(dto.horaFin())
-                .cantidadEstudiantes(dto.cantidadEstudiantes()).build());
+                .cantidadEstudiantes(dto.cantidadEstudiantes()).tipo(tipo).build());
+        if (tipo == TipoAsignacion.EXAMEN) publicarExamenProgramado(a);
         return asignacion(a);
+    }
+
+    /**
+     * academic.exam-scheduled.v1: obligatorios examId, subjectId, startAt, endAt, siteId y
+     * locationId (los UUID de Backoffice). El resto es informativo.
+     */
+    private void publicarExamenProgramado(AsignacionAula a) {
+        if (!eventos.habilitado()) return;
+        Aula aula = a.getAula();
+        Asignatura asignatura = a.getAsignatura();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("examId", String.valueOf(a.getId()));
+        data.put("subjectId", String.valueOf(asignatura.getId()));
+        data.put("startAt", fechaHora(a.getFecha(), a.getHoraInicio()));
+        data.put("endAt", fechaHora(a.getFecha(), a.getHoraFin()));
+        data.put("siteId", aula.getSede().getBackofficeSiteId().toString());
+        data.put("locationId", aula.getBackofficeLocationId().toString());
+        data.put("subjectCode", asignatura.getCodigo());
+        data.put("subjectName", asignatura.getNombre());
+        data.put("locationName", aula.getNombre());
+        data.put("studentCount", a.getCantidadEstudiantes());
+        turnos.findFirstByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(a.getFecha(), a.getFecha())
+                .ifPresent(turno -> {
+                    data.put("examTermId", String.valueOf(turno.getId()));
+                    data.put("examTermName", turno.getNombre());
+                });
+        eventos.registrar(PublicadorEventosCore.EXAMEN_PROGRAMADO, "exam/" + a.getId(), data);
+    }
+
+    /** ISO-8601 con la hora de Argentina, por ejemplo 2026-12-05T09:00:00-03:00. */
+    private static String fechaHora(LocalDate fecha, LocalTime hora) {
+        return ZonedDateTime.of(fecha, hora, ZONA_UNIVERSIDAD).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
     }
     @Transactional(readOnly = true)
     public List<OcupacionAulaDto> agendaAula(Long aulaId, LocalDate fecha) {
@@ -144,7 +191,22 @@ public class PlanificacionServicio {
         PeriodoAcademico p = periodos.save(PeriodoAcademico.builder().anio(dto.anio()).numero(dto.numero())
                 .fechaInicio(dto.fechaInicio()).fechaFin(dto.fechaFin())
                 .inscripcionDesde(dto.inscripcionDesde()).inscripcionHasta(dto.inscripcionHasta()).build());
+        publicarPeriodoDefinido(p);
         return periodo(p);
+    }
+
+    /** academic.term-defined.v1: obligatorios termId, startDate y endDate; el resto es informativo. */
+    private void publicarPeriodoDefinido(PeriodoAcademico p) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("termId", String.valueOf(p.getId()));
+        data.put("startDate", p.getFechaInicio().toString());
+        data.put("endDate", p.getFechaFin().toString());
+        data.put("year", p.getAnio());
+        data.put("number", p.getNumero());
+        data.put("name", p.getAnio() + " - " + p.getNumero() + "° cuatrimestre");
+        data.put("enrollmentStartDate", p.getInscripcionDesde().toString());
+        data.put("enrollmentEndDate", p.getInscripcionHasta().toString());
+        eventos.registrar(PublicadorEventosCore.PERIODO_DEFINIDO, "term/" + p.getId(), data);
     }
     @Transactional(readOnly = true)
     public List<PeriodoRespuestaDto> listarPeriodos() {
@@ -217,11 +279,11 @@ public class PlanificacionServicio {
         return new AulaRespuestaDto(a.getId(), a.getCodigo(), a.getNombre(), a.getBackofficeLocationId(), a.getTipo(),
                 a.getCapacidadMaxima(), a.getSede().getId(), a.getEstado());
     }
-    private AsignacionRespuestaDto asignacion(AsignacionAula a) { return new AsignacionRespuestaDto(a.getId(), a.getAula().getId(), a.getAsignatura().getId(), a.getFecha(), a.getHoraInicio(), a.getHoraFin(), a.getCantidadEstudiantes()); }
+    private AsignacionRespuestaDto asignacion(AsignacionAula a) { return new AsignacionRespuestaDto(a.getId(), a.getAula().getId(), a.getAsignatura().getId(), a.getFecha(), a.getHoraInicio(), a.getHoraFin(), a.getCantidadEstudiantes(), a.getTipo()); }
     private OcupacionAulaDto ocupacion(AsignacionAula a) {
         return new OcupacionAulaDto(TipoOcupacionAula.ASIGNACION, a.getId(), a.getAula().getId(),
                 a.getAsignatura().getId(), a.getAsignatura().getCodigo(), a.getAsignatura().getNombre(),
-                null, a.getFecha(), a.getHoraInicio(), a.getHoraFin(), a.getCantidadEstudiantes());
+                null, a.getFecha(), a.getHoraInicio(), a.getHoraFin(), a.getCantidadEstudiantes(), a.getTipo());
     }
     private void agregarOcurrenciasCurso(List<OcupacionAulaDto> ocupaciones, Curso curso,
                                           LocalDate desde, LocalDate hasta) {
@@ -233,7 +295,7 @@ public class PlanificacionServicio {
             ocupaciones.add(new OcupacionAulaDto(TipoOcupacionAula.CURSO, curso.getId(),
                     curso.getAula().getId(), curso.getAsignatura().getId(), curso.getAsignatura().getCodigo(),
                     curso.getAsignatura().getNombre(), curso.getCodigo(), fecha, curso.getHoraInicio(),
-                    curso.getHoraFin(), null));
+                    curso.getHoraFin(), null, null));
             fecha = fecha.plusWeeks(1);
         }
     }

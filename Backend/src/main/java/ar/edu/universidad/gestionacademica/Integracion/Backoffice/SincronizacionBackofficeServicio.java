@@ -109,8 +109,8 @@ public class SincronizacionBackofficeServicio {
     }
 
     /**
-     * Aplica backoffice.location.upserted.v1. El evento no informa el tipo de espacio, así
-     * que sólo actualiza aulas ya conocidas.
+     * Aplica backoffice.location.upserted.v1. Sólo actualiza aulas ya conocidas: el evento no
+     * trae el código del espacio, así que un aula nueva se trae con una sincronización completa.
      *
      * @return false si el locationId todavía no está en la copia local
      */
@@ -127,6 +127,7 @@ public class SincronizacionBackofficeServicio {
         if (tieneTexto(evento.name())) aula.setNombre(recortar(evento.name(), 255));
         if (evento.capacity() != null && evento.capacity() > 0) aula.setCapacidadMaxima(evento.capacity());
         if (tieneTexto(evento.status())) aula.setEstado(normalizarEstado(evento.status()));
+        if (tieneTexto(evento.type())) aula.setTipo(tipo(evento.type()));
         aulas.save(aula);
         return true;
     }

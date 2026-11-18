@@ -16,9 +16,9 @@ public final class BackofficeDto {
     public record UbicacionBackoffice(UUID locationId, UUID siteId, String code, String name, String type,
                                       Integer capacity, String status) { }
 
-    /** Payload de backoffice.location.upserted.v1. No informa el tipo de espacio. */
+    /** Payload de backoffice.location.upserted.v1. {@code type} es opcional (AULA, LABORATORIO...). */
     public record UbicacionActualizada(UUID locationId, UUID siteId, String name, Integer capacity,
-                                       String status) { }
+                                       String status, String type) { }
 
     public record ResumenSincronizacion(int sedesCreadas, int sedesActualizadas, int sedesDesactivadas,
                                         int aulasCreadas, int aulasActualizadas, int aulasDesactivadas,
