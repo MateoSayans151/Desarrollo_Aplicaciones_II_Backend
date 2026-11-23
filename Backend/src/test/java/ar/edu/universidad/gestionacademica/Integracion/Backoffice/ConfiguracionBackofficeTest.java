@@ -36,7 +36,7 @@ class ConfiguracionBackofficeTest {
     void enlazaLasPropiedadesDeRailway() {
         contexto.withPropertyValues(
                         "backoffice.enabled=true",
-                        "backoffice.base-url=https://backend-production-e464.up.railway.app",
+                        "backoffice.base-url=https://backend-integracion-41b2dbda.up.railway.app",
                         "backoffice.page-size=50",
                         "backoffice.sync-interval=PT6H",
                         "backoffice.sync-initial-delay=PT1H",
@@ -46,7 +46,7 @@ class ConfiguracionBackofficeTest {
                 .run(ctx -> {
                     assertThat(ctx).hasNotFailed();
                     PropiedadesBackoffice propiedades = ctx.getBean(PropiedadesBackoffice.class);
-                    assertThat(propiedades.baseUrl()).isEqualTo("https://backend-production-e464.up.railway.app");
+                    assertThat(propiedades.baseUrl()).isEqualTo("https://backend-integracion-41b2dbda.up.railway.app");
                     assertThat(propiedades.sitesPath()).isEqualTo("/internal/v1/sites");
                     assertThat(propiedades.pageSize()).isEqualTo(50);
                     assertThat(propiedades.events().queue()).isEqualTo("academic.locations.v1");

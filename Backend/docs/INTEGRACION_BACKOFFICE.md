@@ -2,12 +2,17 @@
 
 Backoffice es dueño del catálogo de sedes y espacios. Gestión Académica no lo administra:
 lo lee por las rutas internas de Backoffice y guarda una copia local identificada por
-`siteId` y `locationId`. Los endpoints locales de alta de sedes y aulas quedan sólo como
-mock para la entrega 2 y se bloquean al activar la integración.
+`siteId` y `locationId`. El frontend ya no da de alta sedes ni aulas y sólo muestra las
+vinculadas a Backoffice. Los endpoints locales de alta siguen en el backend para cargar
+datos de prueba sin Backoffice y se bloquean al activar la integración.
 
-## Contrato acordado (respuesta de G8, 10/11/2026)
+## Contrato acordado (respuestas de G8, 10/11/2026 y 18/11/2026)
 
-Base: `https://backend-production-e464.up.railway.app`
+Base: `https://backend-integracion-41b2dbda.up.railway.app` (conectada al CORE real; aviso
+de G8 del 18/11). Mismas rutas, mismo contrato (`openapi-internas.yaml`) y mismos ids de
+sedes y espacios que el entorno anterior. La base anterior,
+`https://backend-production-e464.up.railway.app`, sigue andando sólo con tokens del CORE
+simulado hasta la entrega.
 
 | Ruta interna | Equivale a | Filtros |
 | --- | --- | --- |
@@ -28,8 +33,14 @@ Base: `https://backend-production-e464.up.railway.app`
 - **Cambios:** evento `backoffice.location.upserted.v1` con
   `{ locationId, siteId, name, capacity, status }`, en la cola `academic.locations.v1` que
   creó CORE (card #87).
-- **Hasta la presentación del 18/11** el despliegue de Backoffice sólo valida tokens del
-  CORE simulado. Para probar antes hay que pedirles uno y cargarlo en `CORE_SERVICE_TOKEN`.
+- **Token:** la base nueva valida el token real de `academic-service`
+  (`CORE_SERVICE_CLIENT_SECRET`). `CORE_SERVICE_TOKEN` sólo hace falta para apuntar a la base
+  anterior con un token del CORE simulado.
+- **Errores:** ante una falla, pasarle a G8 el `correlationId` de la respuesta.
+- **Ficha de personas (`GET /internal/v1/users/{userId}`):** desde el 18/11 cada carrera
+  suma `careerCode`, `careerName`, `planCode` y `planName` (pueden venir `null`); `careerId`
+  y `planId` siguen siendo los nuestros. Hoy no consumimos la ficha, así que no nos afecta.
+  Si la usáramos, el permiso es `backoffice:people:read`, que nuestro token ya trae.
 
 ## Cómo funciona
 
@@ -83,11 +94,11 @@ Se conservan las claves `Long` locales porque las usan cursos y reservas.
 | Variable | Valor por defecto | Uso |
 | --- | --- | --- |
 | `BACKOFFICE_ENABLED` | `false` | Activa la sincronización y bloquea el alta local. |
-| `BACKOFFICE_BASE_URL` | `https://backend-production-e464.up.railway.app` | Base de Backoffice. |
+| `BACKOFFICE_BASE_URL` | `https://backend-integracion-41b2dbda.up.railway.app` | Base de Backoffice (CORE real). |
 | `BACKOFFICE_SYNC_INTERVAL` | `PT6H` | Intervalo entre sincronizaciones (ISO-8601). |
 | `BACKOFFICE_EVENTS_ENABLED` | `false` | Consume `backoffice.location.upserted.v1`. |
 | `BACKOFFICE_EVENTS_QUEUE` | `academic.locations.v1` | Cola creada por CORE. |
-| `CORE_SERVICE_TOKEN` | vacío | Token fijo; tiene prioridad. Útil con el CORE simulado. |
+| `CORE_SERVICE_TOKEN` | vacío | Token fijo; tiene prioridad. Sólo para la base anterior con el CORE simulado. |
 | `CORE_SERVICE_TOKEN_URL` | `https://core-api-production-e458.up.railway.app/internal/v1/service-auth/token` | Endpoint de CORE (JSON `clientId`/`clientSecret`). |
 | `CORE_SERVICE_CLIENT_ID` | `academic-service` | Service account. |
 | `CORE_SERVICE_CLIENT_SECRET` | vacío | Sólo en Railway y en el `.env` local, nunca en Git. |
@@ -119,7 +130,8 @@ No publicamos un evento al activar un plan: el catálogo de CORE sólo nos asign
 
 ## Pendiente con Backoffice
 
-- Que confirmen cuándo validan tokens del CORE real (después del 18/11) o que nos pasen un
-  token del CORE simulado para probar antes.
-- El valor exacto del claim `service` de su token, para restringir `/internal/v1/**` con
+- Nada bloqueante. Ya validan el token del CORE real (18/11) y el claim `service` de su
+  token es `backoffice` (confirmado por CORE), que es el valor por defecto de
   `CORE_INTERNAL_ALLOWED_SERVICES`.
+- En Railway, sacar `BACKOFFICE_BASE_URL` si estaba fijada a la base anterior (o
+  apuntarla a la nueva) y `CORE_SERVICE_TOKEN` si quedó el token simulado.
