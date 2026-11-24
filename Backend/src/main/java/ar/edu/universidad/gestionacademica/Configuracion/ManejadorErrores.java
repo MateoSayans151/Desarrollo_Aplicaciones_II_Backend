@@ -121,6 +121,7 @@ public class ManejadorErrores extends ResponseEntityExceptionHandler {
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             errores.put(error.getField(), error.getDefaultMessage());
         }
+        log.warn("Validación rechazada en {}: {}", servlet(request).getRequestURI(), errores);
         return respuesta(HttpStatus.BAD_REQUEST, "Solicitud inválida", "VALIDATION_ERROR",
                 "Hay datos inválidos en la solicitud", servlet(request), errores);
     }
@@ -129,6 +130,7 @@ public class ManejadorErrores extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
                                                                   HttpHeaders headers, HttpStatusCode status,
                                                                   WebRequest request) {
+        log.warn("JSON inválido en {}: {}", servlet(request).getRequestURI(), ex.getMostSpecificCause().getMessage());
         return respuesta(HttpStatus.BAD_REQUEST, "Solicitud inválida", "VALIDATION_ERROR",
                 "El cuerpo de la solicitud no es válido: revisá el JSON, las fechas, las horas y los valores permitidos",
                 servlet(request), null);
@@ -137,6 +139,7 @@ public class ManejadorErrores extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
                                                         HttpStatusCode status, WebRequest request) {
+        log.warn("Parámetro inválido en {}: {}={}", servlet(request).getRequestURI(), ex.getPropertyName(), ex.getValue());
         return respuesta(HttpStatus.BAD_REQUEST, "Solicitud inválida", "VALIDATION_ERROR",
                 "Hay un parámetro con formato inválido en la solicitud", servlet(request), null);
     }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Formato de los logs según LOG_FORMAT (propiedad logging.formato), en minúsculas:
+    console (por defecto): el texto habitual de Spring Boot, cómodo para desarrollo local.
+    json: una línea JSON por evento. Railway la interpreta y permite filtrar por atributos, por
+          ejemplo @consumidor:servicio:backoffice, @funcion:CursoController.inscribir o @level:error.
+  Cada formato vive en logback-<formato>.xml.
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <springProperty scope="context" name="FORMATO_LOG" source="logging.formato" defaultValue="console"/>
+    <include resource="logback-${FORMATO_LOG}.xml"/>
+</configuration>

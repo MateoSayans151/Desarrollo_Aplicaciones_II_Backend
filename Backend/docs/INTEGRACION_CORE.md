@@ -162,6 +162,7 @@ Un docente "dicta" un curso cuando su `sub` figura como `docenteId` en `curso_do
 | `BACKOFFICE_EVENTS_ENABLED` | `true` |
 | `TEACHER_EVENTS_ENABLED` | `true` |
 | `CORE_EVENTS_PUBLISH_ENABLED` | `true` |
+| `LOG_FORMAT` | `json` (logs filtrables en Railway; ver "Logs" en el README del backend) |
 
 El resto (URLs de CORE, `CORE_SERVICE_CLIENT_ID`, `CORE_INTERNAL_ALLOWED_SERVICES`) ya tiene el
 valor correcto por defecto. Antes del primer despliegue, correr

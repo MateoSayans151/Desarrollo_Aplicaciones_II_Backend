@@ -227,6 +227,26 @@ correlativas se consultan con
 `docker/migrations/06-regularidad-por-curso.sql` crea la tabla y completa con 75% y
 6.0 los cursos que todavía no tienen configuración.
 
+## Logs
+
+Cada petición deja en la salida estándar (que Railway muestra en *Deployments > Logs*):
+
+- `HTTP <método> <ruta> -> status=... duracionMs=... consumidor=... usuario=...`: una línea por
+  petición, incluidos los 401/403. No se registran `/health/**` ni Swagger.
+- `ENTRADA funcion=<Controller.metodo> usuario=... params={...}`, `SALIDA ... resultado=...` o
+  `ERROR ... error=<Excepcion> mensaje="..."` por cada función de controlador. Las claves
+  `password`, `token`, `secret`, etc. se enmascaran y el JSON se recorta a
+  `LOG_LLAMADAS_MAX_CHARS` caracteres (2000 por defecto). `LOG_LLAMADAS_ENABLED=false` lo apaga.
+
+`consumidor` se deduce de la petición: `servicio:backoffice` (token de servicio),
+`core-gateway[STUDENT]` / `core-gateway[TEACHER]` / ... (JWT que pasó por el gateway de CORE;
+STUDENT suele ser el Portal de Alumnos y TEACHER el de Docencia), `jwt-directo[...]`,
+`frontend-propio` (sesión local) o `anonimo`. Todas las líneas llevan el `correlationId`.
+
+Con `LOG_FORMAT=json` cada línea sale como JSON y Railway permite filtrar por atributo, por
+ejemplo `@consumidor:servicio:backoffice`, `@funcion:CursoController.inscribir`,
+`@level:ERROR` o `@correlationId:<id>`. Sin la variable, el formato es texto.
+
 ## Pruebas
 
 ```bash
